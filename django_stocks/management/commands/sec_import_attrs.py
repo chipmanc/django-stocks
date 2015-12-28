@@ -17,8 +17,8 @@ from django.db import transaction, connection, IntegrityError, DatabaseError
 from django.conf import settings
 from django.utils import timezone
 
-from django_sec import models
-from django_sec.models import DATA_DIR, c
+from django_stocks import models
+from django_stocks.models import DATA_DIR, c
 
 try:
     from psycopg2.extensions import TransactionRollbackError
@@ -279,7 +279,7 @@ class Command(BaseCommand):
                     print>>sys.stderr, 'Warning: the company you specified with cik %s is not marked for loading.' % (self.cik,)
             
             if stripe is not None:
-                q = q.extra(where=['(("django_sec_index"."id" %%%% %i) = %i)' % (stripe_mod, stripe_num)])
+                q = q.extra(where=['(("django_stocks_index"."id" %%%% %i) = %i)' % (stripe_mod, stripe_num)])
                     
             #print_status('Finding total record count...')
             total_count = total = q.count()

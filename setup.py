@@ -15,6 +15,7 @@ setup(
     description = "Parse XBRL filings from the SEC's EDGAR in Python",
     license = "LGPL",
     url = "https://github.com/chipmanc/django-stocks",
+    keywords = ["django", "stocks", "SEC"],
     classifiers = [
         'License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)',
         'Development Status :: 4 - Beta',

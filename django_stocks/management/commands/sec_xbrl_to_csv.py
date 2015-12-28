@@ -1,7 +1,7 @@
-from django_sec import xbrl
+from django_stocks import xbrl
 import csv
 
-from django_sec.models import *
+from django_stocks.models import *
 from django.core.management.base import NoArgsCommand
 
 import os
@@ -16,7 +16,7 @@ class Command(NoArgsCommand):
 
         headers = ['EntityRegistrantName', 'EntityCentralIndexKey', 'EntityFilerCategory', 'TradingSymbol', 'FiscalYear', 'FiscalPeriod', 'DocumentType', 'PeriodStartDate', 'DocumentPeriodEndDate', 'Assets', 'CurrentAssets', 'NoncurrentAssets', 'LiabilitiesAndEquity', 'Liabilities', 'CurrentLiabilities', 'NoncurrentLiabilities', 'CommitmentsAndContingencies', 'TemporaryEquity', 'Equity', 'EquityAttributableToParent', 'EquityAttributableToNoncontrollingInterest', 'Revenues', 'CostOfRevenue', 'GrossProfit', 'OperatingExpenses', 'CostsAndExpenses', 'OtherOperatingIncome', 'OperatingIncomeLoss', 'NonoperatingIncomeLoss', 'InterestAndDebtExpense', 'NonoperatingIncomeLossPlusInterestAndDebtExpense', 'IncomeBeforeEquityMethodInvestments', 'IncomeFromEquityMethodInvestments', 'IncomeFromContinuingOperationsBeforeTax', 'IncomeTaxExpenseBenefit', 'IncomeFromContinuingOperationsAfterTax', 'IncomeFromDiscontinuedOperations', 'ExtraordaryItemsGainLoss', 'NetIncomeLoss', 'NetIncomeAttributableToParent', 'NetIncomeAttributableToNoncontrollingInterest', 'PreferredStockDividendsAndOtherAdjustments', 'NetIncomeAvailableToCommonStockholdersBasic', 'ComprehensiveIncome', 'OtherComprehensiveIncome', 'NetCashFlowsOperating', 'NetCashFlowsOperatingContinuing', 'NetCashFlowsOperatingDiscontinued', 'NetCashFlowsInvesting', 'NetCashFlowsInvestingContinuing', 'NetCashFlowsInvestingDiscontinued', 'NetCashFlowsFinancing', 'NetCashFlowsFinancingContinuing', 'NetCashFlowsFinancingDiscontinued', 'NetCashFlowsContinuing', 'NetCashFlowsDiscontinued', 'ExchangeGainsLosses', 'NetCashFlow', 'ComprehensiveIncomeAttributableToParent', 'ComprehensiveIncomeAttributableToNoncontrollingInterest', 'SGR', 'ROA', 'ROE', 'ROS', 'SECFilingPage', 'LinkToXBRLInstance']
 
-        fout = csv.DictWriter(open('/home/luke/research/sec/django_sec/test.csv','w'),headers)
+        fout = csv.DictWriter(open('/home/luke/research/sec/django_stocks/test.csv','w'),headers)
         fout.writeheader()
 
         #this SQL is just a way of getting a list of particular CIKs I want

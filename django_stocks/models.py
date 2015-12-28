@@ -9,11 +9,11 @@ from django.utils.translation import ugettext, ugettext_lazy as _
 
 try:
     from admin_steroids.utils import StringWithTitle
-    APP_LABEL = StringWithTitle('django_sec', 'SEC')
+    APP_LABEL = StringWithTitle('django_stocks', 'SEC')
 except ImportError:
-    APP_LABEL = 'django_sec'
+    APP_LABEL = 'django_stocks'
 
-from django_sec import xbrl
+from django_stocks import xbrl
 
 import constants as c
 from settings import DATA_DIR

@@ -16,9 +16,9 @@ Install the package using pip via:
 
     pip install https://github.com/chipmanc/django-sec
 
-then add `django_sec` to your `INSTALLED_APPS` and run:
+then add `django_stocks` to your `INSTALLED_APPS` and run:
 
-    python manage.py migrate django_sec
+    python manage.py migrate django_stocks
 
 Usage
 -----
@@ -34,12 +34,12 @@ documents between those years.
 
 If you're running this on the devserver, you can monitor import progress at:
 
-    http://localhost:8000/admin/django_sec/indexfile/
+    http://localhost:8000/admin/django_stocks/indexfile/
     
 and see the loaded indexes and companies at:
 
-    http://localhost:8000/admin/django_sec/index/
-    http://localhost:8000/admin/django_sec/company/
+    http://localhost:8000/admin/django_stocks/index/
+    http://localhost:8000/admin/django_stocks/company/
 
 Because the list of companies and filings is enormous, by default, all
 companies are configured to not download any actual filings
@@ -54,7 +54,7 @@ company change list page, select one or more companies and run the action
 This will download all 10-K and 10-Q filings, extract the attributes and populate
 them into the AttributeValue table accessible at:
 
-    http://localhost:8000/admin/django_sec/attributevalue/
+    http://localhost:8000/admin/django_stocks/attributevalue/
 
 Currently, this has only been tested to download and extract attributes from
 10-K and 10-Q filings.
