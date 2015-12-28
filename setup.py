@@ -4,28 +4,17 @@ import urllib
 
 from setuptools import setup, find_packages, Command
 
-import django_sec
+import django_stocks
 
 setup(
-    name = "django-sec",
-    version = django_sec.__version__,
+    name = "django-stocks",
+    version = django_stocks.__version__,
     packages = find_packages(),
-#    package_data = {
-#        'django_sec': [
-#            'templates/*.*',
-#            'templates/*/*.*',
-#            'templates/*/*/*.*',
-#            'static/*.*',
-#            'static/*/*.*',
-#            'static/*/*/*.*',
-#        ],
-#    },
-    author = "Chris Spencer",
-    author_email = "chrisspen@gmail.com",
+    author = "Chris Chipman",
+    author_email = "chipmanc@bellsouth.net",
     description = "Parse XBRL filings from the SEC's EDGAR in Python",
     license = "LGPL",
-    url = "https://github.com/chrisspen/django-sec",
-    #https://pypi.python.org/pypi?%3Aaction=list_classifiers
+    url = "https://github.com/chipmanc/django-stocks",
     classifiers = [
         'License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)',
         'Development Status :: 4 - Beta',
@@ -37,5 +26,5 @@ setup(
         'Framework :: Django',
     ],
     zip_safe = False,
-    install_requires = ['Django>=1.4.0', 'lxml'],
+    install_requires = ['Django>=1.9.0', 'lxml'],
 )

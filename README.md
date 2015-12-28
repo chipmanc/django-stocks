@@ -6,16 +6,15 @@ into your local database. It provides an admin interface to allow you to
 control which indexes and attributes are loaded as well as inspect downloaded
 data.
 
-This is a fork of Luke Rosiak's [PySEC](https://github.com/lukerosiak/pysec),
-modified to act as a pluggable Django app with fleshed out admin interface and
-more efficient data import commands.
+This is a fork of Chris Spencer's django-sec (https://github.com/chrisspen/django-sec),
+which is originally a fork of Luke Rosiak's [PySEC](https://github.com/lukerosiak/pysec).
 
 Installation
 ------------
 
 Install the package using pip via:
 
-    pip install https://github.com/chrisspen/django-sec/archive/master.zip
+    pip install https://github.com/chipmanc/django-sec
 
 then add `django_sec` to your `INSTALLED_APPS` and run:
 
