@@ -24,7 +24,7 @@ class Namespace(models.Model):
     """
     
     name = models.CharField(
-        max_length=500,
+        max_length=255,
         blank=False,
         null=False,
         db_index=True,
@@ -90,7 +90,7 @@ class Attribute(models.Model):
     namespace = models.ForeignKey('Namespace')
     
     name = models.CharField(
-        max_length=500,
+        max_length=255,
         blank=False,
         null=False,
         db_index=True)
@@ -128,15 +128,10 @@ class Attribute(models.Model):
         i = 0
         for r in q.iterator():
             i += 1
-#            if not i % 100:
-#                print '\rRefreshing attribute %i of %i.' % (i, total),
-#                sys.stdout.flush()
             total_values = AttributeValue.objects.filter(attribute__name=r.name).count()
             cls.objects.filter(id=r.id).update(
-                #total_values=r.values.all().count(),
                 total_values=total_values,
                 total_values_fresh=True)
-#        print '\rRefreshing attribute %i of %i.' % (total, total),
 
 class AttributeValue(models.Model):
     
@@ -349,10 +344,8 @@ class Index(models.Model):
             # form type.
             ('company', 'form', 'date', 'filename', 'year', 'quarter'),
         )
-        index_together = (
-            ('year', 'quarter'),
-            ('company', 'date', 'filename'),
-        )
+        index_together = (('year', 'quarter'),
+                          ('company', 'date', 'filename'),)
         ordering = ('-date', 'filename')
     
     def xbrl_link(self):
@@ -413,9 +406,6 @@ class Index(models.Model):
             print 'html_link:',
             print 'xbrl_link:',xbrl_link
             
-#        if not os.path.exists(html_link.split('/')[-1]):
-#            os.system('wget %s' % html_link)
-        
         if xbrl_link:
             if not os.path.exists(xbrl_link.split('/')[-1]):
                 if verbose:
@@ -431,23 +421,17 @@ class Index(models.Model):
         except:
             self.download()
         files = os.listdir('.')
-#        print 'files:',files
         archives = [elem for elem in files if elem.endswith('.zip')]
         if not archives:
             return None, None
         zf = zipfile.ZipFile(archives[0])
-        #xml = sorted([elem for elem in files if elem.endswith('.xml')],key=len)
         xml = sorted([elem for elem in zf.namelist() if elem.endswith('.xml')], key=len)
-#        print 'xml:',xml
-#        sys.exit()
         if not len(xml):
             return None, None
-        #return self.localpath() + xml[0], zf.open
         return xml[0], zf.open
 
     def xbrl(self):
         filepath, open_method = self.xbrl_localpath()
-#        print 'filepath:',filepath
         if not filepath:
             print 'no xbrl found. this option is for 10-ks.'
             return

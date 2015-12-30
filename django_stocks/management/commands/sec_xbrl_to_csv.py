@@ -11,7 +11,7 @@ import psycopg2
 
 class Command(NoArgsCommand):
     help = "Put the 50+ common accounting terms from an arbitrary list of 10ks into a spreadsheet"
-    
+
     def handle_noargs(self, **options):
 
         headers = ['EntityRegistrantName', 'EntityCentralIndexKey', 'EntityFilerCategory', 'TradingSymbol', 'FiscalYear', 'FiscalPeriod', 'DocumentType', 'PeriodStartDate', 'DocumentPeriodEndDate', 'Assets', 'CurrentAssets', 'NoncurrentAssets', 'LiabilitiesAndEquity', 'Liabilities', 'CurrentLiabilities', 'NoncurrentLiabilities', 'CommitmentsAndContingencies', 'TemporaryEquity', 'Equity', 'EquityAttributableToParent', 'EquityAttributableToNoncontrollingInterest', 'Revenues', 'CostOfRevenue', 'GrossProfit', 'OperatingExpenses', 'CostsAndExpenses', 'OtherOperatingIncome', 'OperatingIncomeLoss', 'NonoperatingIncomeLoss', 'InterestAndDebtExpense', 'NonoperatingIncomeLossPlusInterestAndDebtExpense', 'IncomeBeforeEquityMethodInvestments', 'IncomeFromEquityMethodInvestments', 'IncomeFromContinuingOperationsBeforeTax', 'IncomeTaxExpenseBenefit', 'IncomeFromContinuingOperationsAfterTax', 'IncomeFromDiscontinuedOperations', 'ExtraordaryItemsGainLoss', 'NetIncomeLoss', 'NetIncomeAttributableToParent', 'NetIncomeAttributableToNoncontrollingInterest', 'PreferredStockDividendsAndOtherAdjustments', 'NetIncomeAvailableToCommonStockholdersBasic', 'ComprehensiveIncome', 'OtherComprehensiveIncome', 'NetCashFlowsOperating', 'NetCashFlowsOperatingContinuing', 'NetCashFlowsOperatingDiscontinued', 'NetCashFlowsInvesting', 'NetCashFlowsInvestingContinuing', 'NetCashFlowsInvestingDiscontinued', 'NetCashFlowsFinancing', 'NetCashFlowsFinancingContinuing', 'NetCashFlowsFinancingDiscontinued', 'NetCashFlowsContinuing', 'NetCashFlowsDiscontinued', 'ExchangeGainsLosses', 'NetCashFlow', 'ComprehensiveIncomeAttributableToParent', 'ComprehensiveIncomeAttributableToNoncontrollingInterest', 'SGR', 'ROA', 'ROE', 'ROS', 'SECFilingPage', 'LinkToXBRLInstance']
@@ -19,7 +19,7 @@ class Command(NoArgsCommand):
         fout = csv.DictWriter(open('/home/luke/research/sec/django_stocks/test.csv','w'),headers)
         fout.writeheader()
 
-        #this SQL is just a way of getting a list of particular CIKs I want
+        # this SQL is just a way of getting a list of particular CIKs I want
         conn = psycopg2.connect("dbname=recovery")
         cur = conn.cursor()
         cur.execute("SELECT cik, ticker FROM index WHERE cik is not null and use='1';")
@@ -36,7 +36,7 @@ class Command(NoArgsCommand):
                     if x==None:
                         print 'no xbrl for ', cik, year
                         continue
-                                        
+
                     d = {}
                     for f in headers:
                         if f in x.fields.keys():
@@ -49,7 +49,7 @@ class Command(NoArgsCommand):
                     d['PeriodStartDate'] = x.fields['IncomeStatementPeriodYTD']
                     d['SECFilingPage'] = latest.index_link()
                     d['LinkToXBRLInstance'] = latest.xbrl_link() 
-                    
-                    
+
+
                     fout.writerow( d )
-               
+
