@@ -5,12 +5,9 @@ import urllib
 import os
 import sys
 from zipfile import ZipFile
-from datetime import date, datetime, timedelta
-from optparse import make_option
+from datetime import date, datetime
 
-from django.core.management.base import NoArgsCommand
-from django.db import transaction, connection
-from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from django.utils.encoding import force_text
 from django_stocks.models import Company, Index, IndexFile, DATA_DIR
@@ -67,13 +64,12 @@ def get_filing_list(year, quarter, reprocess=False):
     bulk_companies = []
     bulk_indexes = []
     bulk_commit_freq = 1000
-    status_secs = 3
+    status_secs = 5
     lines = zdata.split('\n')
     i = 0
     total = len(lines)
     IndexFile.objects.filter(id=ifile.id).update(total_rows=total)
     last_status = None
-    #prior_keys = set()
     prior_ciks = set(Company.objects.all().values_list('cik', flat=True))
     print 'Found %i prior ciks.' % len(prior_ciks)
     index_add_count = 0
@@ -100,17 +96,15 @@ def get_filing_list(year, quarter, reprocess=False):
         name = r[0:62].strip()
 
         cik = int(r[74:86].strip())
-        if cik not in prior_ciks:
+        try:
+            Company.objects.get(cik=cik)
+        except:
             company_add_count += 1
             prior_ciks.add(cik)
             bulk_companies.append(Company(cik=cik,
                                   name=force_text(name, errors='replace')))
 
         filename = r[98:].strip()
-        key = (cik, dt, filename)
-        #if key in prior_keys:
-        #    continue
-        #prior_keys.add(key)
         if Index.objects.filter(company__cik=cik,
                                 date=dt,
                                 filename=filename).exists():
@@ -124,7 +118,7 @@ def get_filing_list(year, quarter, reprocess=False):
             quarter=quarter,
             filename=filename,
         ))
-        if not len(bulk_indexes) % bulk_commit_freq:
+        if len(bulk_indexes) % bulk_commit_freq:
             if len(bulk_companies):
                 Company.objects.bulk_create(bulk_companies)
                 bulk_companies = []
