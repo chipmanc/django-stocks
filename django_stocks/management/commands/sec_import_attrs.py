@@ -67,11 +67,6 @@ class Command(BaseCommand):
         make_option('--verbose',
                     action='store_true',
                     default=False),
-        make_option('--multi',
-                    dest='multi',
-                    default=0,
-                    help=('The number of processes to use. '
-                          'Must be a multiple of 2.')),
         make_option('--show-pending',
                     action='store_true',
                     default=False,
@@ -86,7 +81,8 @@ class Command(BaseCommand):
         self.verbose = options['verbose']
 
         self.stripe_counts = {} # {stripe:{current,total}
-        self.last_progress_refresh = None
+        self.last_status = None
+        self.status_secs = 3
         self.start_times = {} # {key:start_time}
 
         self.cik = (options['cik'] or '').strip()
@@ -114,49 +110,15 @@ class Command(BaseCommand):
 
         self.status = None
         self.progress = collections.OrderedDict()
-        multi = int(options['multi'])
         kwargs = options.copy()
-        if multi:
-            assert multi > 1 and is_power_of_two(multi), \
-                "Process count must be greater than 1 and a multiple of 2."
-            processes = []
-            self.status = Queue()
-            for i, _ in enumerate(xrange(multi)):
-                stripe = kwargs['stripe'] = '%i%i' % (i, multi)
-                kwargs['status'] = self.status
+        self.start_times[None] = time.time()
+        self.run_process(**kwargs)
 
-                connection.close()
-                p = Process(target=self.run_process, kwargs=kwargs)
-                p.daemon = True
-                processes.append(p)
-                p.start()
-            self.progress[stripe] = (0, 0, 0, 0, None, '')
-            # return
-            while any(i.is_alive() for i in processes):
-                time.sleep(0.1)
-                while not self.status.empty():
-                    (stripe, current, total,
-                     sub_current, sub_total,
-                     eta, message) = self.status.get()
-                    self.progress[stripe] = (current, total,
-                                             sub_current, sub_total,
-                                             eta, message)
-                    if stripe not in self.start_times:
-                        self.start_times[stripe] = time.time()
-                    self.print_progress()
-            print 'All processes complete.'
-        else:
-            self.start_times[None] = time.time()
-            self.run_process(**kwargs)
-
-    def print_progress(self, clear=True, newline=True):
-        if (self.last_progress_refresh and 
-            (datetime.now()-self.last_progress_refresh).seconds < 0.5):
+    def print_progress(self):
+        if (self.last_status and 
+            (datetime.now()-self.last_status).seconds < self.status_secs):
             return
         bar_length = 10
-        if clear:
-            sys.stdout.write('\033[2J\033[H') # clear screen
-            sys.stdout.write('Importing attributes\n')
         for (stripe, (current, total, sub_current,
                       sub_total, eta, message)) in sorted(self.progress.items()):
             sub_status = ''
@@ -181,26 +143,16 @@ class Command(BaseCommand):
             if sub_current and sub_total:
                 sub_status = '(subtask %s of %s) ' % (sub_current, sub_total)
             sys.stdout.write(
-                (('' if newline else '\r')+"%s [%s] %s of %s %s%s%% eta=%s: %s"+('\n' if newline else '')) \
+                ("%s [%s] %s of %s %s%s%% eta=%s: %s\n") \
                     % (stripe, bar, current, total, sub_status, percent, eta, message))
         sys.stdout.flush()
-        self.last_progress_refresh = datetime.now()
+        self.last_status = datetime.now()
 
-        # Update job.
         overall_current_count = 0
         overall_total_count = 0
         for stripe, (current, total) in self.stripe_counts.iteritems():
             overall_current_count += current
             overall_total_count += total
-        # print 'overall_current_count:',overall_current_count
-        # print 'overall_total_count:',overall_total_count
-        if overall_total_count and Job:
-            Job.update_progress(
-                total_parts_complete=overall_current_count,
-                total_parts=overall_total_count,
-            )
-            if not self.dryrun:
-                transaction.commit()
 
     def run_process(self, status=None, **kwargs):
         tmp_debug = settings.DEBUG
@@ -221,7 +173,6 @@ class Command(BaseCommand):
 
     def import_attributes(self, status=None, **kwargs):
         stripe = kwargs.get('stripe')
-        reraise = kwargs.get('reraise')
 
         current_count = 0
         total_count = 0
@@ -255,7 +206,7 @@ class Command(BaseCommand):
                     estimated_completion_datetime,
                     message,
                 )
-                self.print_progress(clear=False, newline=True)
+                self.print_progress()
 
         stripe_num, stripe_mod = parse_stripe(stripe)
         if stripe:
