@@ -86,7 +86,6 @@ class Command(BaseCommand):
         self.verbose = options['verbose']
 
         self.stripe_counts = {} # {stripe:{current,total}
-        self.last_progress_refresh = None
         self.start_times = {} # {key:start_time}
 
         self.cik = (options['cik'] or '').strip()
@@ -112,7 +111,6 @@ class Command(BaseCommand):
             end_year = date.today().year
         self.end_year = end_year
 
-        self.status = None
         self.progress = collections.OrderedDict()
         multi = int(options['multi'])
         kwargs = options.copy()
@@ -149,9 +147,11 @@ class Command(BaseCommand):
             self.start_times[None] = time.time()
             self.run_process(**kwargs)
 
-    def print_progress(self, clear=True, newline=True):
-        if (self.last_progress_refresh and 
-            (datetime.now()-self.last_progress_refresh).seconds < 0.5):
+    def print_progress(self):
+        last_status = None
+        status_secs = 3
+        if (last_status and 
+            (datetime.now()-last_status).seconds < status_secs):
             return
         bar_length = 10
         if clear:
@@ -184,7 +184,7 @@ class Command(BaseCommand):
                 (('' if newline else '\r')+"%s [%s] %s of %s %s%s%% eta=%s: %s"+('\n' if newline else '')) \
                     % (stripe, bar, current, total, sub_status, percent, eta, message))
         sys.stdout.flush()
-        self.last_progress_refresh = datetime.now()
+        last_status = datetime.now()
 
         # Update job.
         overall_current_count = 0
@@ -202,13 +202,13 @@ class Command(BaseCommand):
             if not self.dryrun:
                 transaction.commit()
 
-    def run_process(self, status=None, **kwargs):
+    def run_process(self, **kwargs):
         tmp_debug = settings.DEBUG
         settings.DEBUG = False
         transaction.enter_transaction_management()
         transaction.managed(True)
         try:
-            self.import_attributes(status=status, **kwargs)
+            self.import_attributes(**kwargs)
         finally:
             settings.DEBUG = tmp_debug
             if self.dryrun:
@@ -219,7 +219,7 @@ class Command(BaseCommand):
             transaction.leave_transaction_management()
             connection.close()
 
-    def import_attributes(self, status=None, **kwargs):
+    def import_attributes(self, **kwargs):
         stripe = kwargs.get('stripe')
         reraise = kwargs.get('reraise')
 
@@ -232,30 +232,17 @@ class Command(BaseCommand):
         sub_total = 0
 
         def print_status(message, count=None, total=None):
-            # print 'message:',message
             current_count = count or 0
             total_count = total or 0
-            if status:
-                status.put([
-                    stripe,
-                    current_count+1,
-                    total_count,
-                    sub_current,
-                    sub_total,
-                    estimated_completion_datetime,
-                    message,
-                ])
-            else:
-                # print 'total_count:',total_count
-                self.progress[stripe] = (
-                    current_count,
-                    total_count,
-                    sub_current,
-                    sub_total,
-                    estimated_completion_datetime,
-                    message,
-                )
-                self.print_progress(clear=False, newline=True)
+            self.progress[stripe] = (
+                current_count,
+                total_count,
+                sub_current,
+                sub_total,
+                estimated_completion_datetime,
+                message,
+            )
+            self.print_progress()
 
         stripe_num, stripe_mod = parse_stripe(stripe)
         if stripe:
@@ -289,7 +276,6 @@ class Command(BaseCommand):
             if stripe is not None:
                 q = q.extra(where=['(("django_stocks_index"."id" %%%% %i) = %i)' % (stripe_mod, stripe_num)])
 
-            # print_status('Finding total record count...')
             total_count = total = q.count()
 
             if kwargs['show_pending']:
