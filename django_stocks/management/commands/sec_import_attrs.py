@@ -23,16 +23,6 @@ from django_stocks.models import DATA_DIR, c
 def is_power_of_two(x):
     return (x & (x - 1)) == 0
 
-def parse_stripe(stripe):
-    stripe_num = None
-    stripe_mod = None
-    if stripe:
-        assert isinstance(stripe, basestring) and len(stripe) == 2
-        stripe_num, stripe_mod = stripe
-        stripe_num = int(stripe_num)
-        stripe_mod = int(stripe_mod)
-        assert stripe_num < stripe_mod
-    return stripe_num, stripe_mod
 
 class Command(BaseCommand):
     help = "Shows data from filings."
@@ -68,86 +58,52 @@ class Command(BaseCommand):
         self.end_year = int(options['end_year'])
         self.cik = (int(options['cik']) or None)
 
-        self.stripe_counts = {} # {stripe:{current,total}
-        self.last_progress_refresh = None
-        self.start_times = {} # {key:start_time}
+        self.stripe_counts = {}
+        self.start_times = {}
         self.progress = collections.OrderedDict()
         kwargs = options.copy()
         self.start_times[None] = time.time()
         self.import_attributes(**kwargs)
 
-    def print_progress(self):
-        if (self.last_progress_refresh and 
-            (datetime.now()-self.last_progress_refresh).seconds < 0.5):
+    def print_progress(self, message, current_index_count=0, total_index_count=0, sub_current=0, sub_total=0):
+        last_progress_refresh = None
+
+        if (last_progress_refresh and 
+            (datetime.now()-last_progress_refresh).seconds < 0.5):
             return
         bar_length = 10
-        for (stripe, (current, total, sub_current,
-                      sub_total, eta, message)) in sorted(self.progress.items()):
+        if total_index_count:
+            percent = current_index_count / float(total_index_count)
+            bar = ('=' * int(percent * bar_length)).ljust(bar_length)
+            percent = int(percent * 100)
+        else:
+            sys.stdout.write(message)
+            sys.stdout.flush()
+            return
+
+        if sub_current and sub_total:
+            sub_status = '(subtask %s of %s) ' % (sub_current, sub_total)
+        else:
             sub_status = ''
-            if total:
-                if not eta:
-                    start_time = self.start_times[stripe]
-                    current_seconds = time.time() - start_time
-                    total_seconds = float(total)/current*current_seconds
-                    remaining_seconds = int(total_seconds - current_seconds)
-                    eta = timezone.now() + timedelta(seconds=remaining_seconds)
 
-                self.stripe_counts[stripe] = (current, total)
-                percent = current/float(total)
-                bar = ('=' * int(percent * bar_length)).ljust(bar_length)
-                percent = int(percent * 100)
-            else:
-                eta = eta or '?'
-                percent = 0
-                bar = ('=' * int(percent * bar_length)).ljust(bar_length)
-                percent = '?'
-                total = '?'
-            if sub_current and sub_total:
-                sub_status = '(subtask %s of %s) ' % (sub_current, sub_total)
-            sys.stdout.write(
-                ("%s [%s] %s of %s %s%s%% eta=%s: %s\n") \
-                    % (stripe, bar, current, total, sub_status, percent, eta, message))
+        sys.stdout.write("[%s] %s of %s %s%s%%  %s\n" \
+                      % (bar, current_index_count, total_index_count, sub_status, percent, message))
         sys.stdout.flush()
-        self.last_progress_refresh = datetime.now()
+        last_progress_refresh = datetime.now()
 
-        overall_current_count = 0
-        overall_total_count = 0
-        for stripe, (current, total) in self.stripe_counts.iteritems():
-            overall_current_count += current
-            overall_total_count += total
 
 
     def import_attributes(self, **kwargs):
         transaction.enter_transaction_management()
         transaction.managed(True)
 
-        stripe = kwargs.get('stripe')
-        reraise = kwargs.get('reraise')
-
         current_count = 0
-        total_count = 0
         fatal_errors = False
         fatal_error = None
         estimated_completion_datetime = None
         sub_current = 0
         sub_total = 0
 
-        def print_status(message, count=None, total=None):
-            current_count = count or 0
-            total_count = total or 0
-            self.progress[stripe] = (
-                current_count,
-                total_count,
-                sub_current,
-                sub_total,
-                estimated_completion_datetime,
-                message)
-            self.print_progress()
-
-        stripe_num, stripe_mod = parse_stripe(stripe)
-        if stripe:
-            print_status('Striping with number %i and modulus %i.' \
-                % (stripe_num, stripe_mod))
 
         try:
             # Get a file from the index.
@@ -166,29 +122,24 @@ class Command(BaseCommand):
             if self.forms:
                 q = q.filter(form__in=self.forms)
 
-            q2 = q
             if self.cik:
-                q = q.filter(company__cik=self.cik, company__load=True)
-                q2 = q2.filter(company__cik=self.cik)
-                if not q.count() and q2.count():
-                    print>>sys.stderr, 'Warning: the company you specified with cik %s is not marked for loading.' % (self.cik,)
-
-            if stripe is not None:
-                q = q.extra(where=['(("django_stocks_index"."id" %%%% %i) = %i)' % (stripe_mod, stripe_num)])
-
-            total_count = total = q.count()
+                q = q.filter(company__cik=self.cik,
+                             company__load=True)
+                if not q.count():
+                    print>>sys.stderr, ('Warning: the company you specified with cik %s is '
+                                       'either not marked for loading or does not exist.') % (self.cik)
 
 
-            print_status('%i total rows.' % (total,))
+            total_index_count = q.count()
+            self.print_progress('%i total rows.\n' % (total_index_count))
             i = 0
             commit_freq = 100
-            print_status('%i indexes found for forms %s.' % (total, ', '.join(self.forms)), count=0, total=total)
             for ifile in q.iterator():
                 i += 1
                 current_count = i
 
                 msg = 'Processing index %s.' % (ifile.filename,)
-                print_status(msg, count=i, total=total)
+                self.print_progress(msg, current_index_count=i, total_index_count=total_index_count)
 
                 if not i % commit_freq:
                     sys.stdout.flush()
@@ -230,7 +181,7 @@ class Command(BaseCommand):
                             j += 1
                             sub_current = j
                             if not j % commit_freq:
-                                print_status(msg, count=i, total=total)
+                                self.print_progress(msg, current_index_count=i, total_index_count=total_index_count)
                                 if not self.dryrun:
                                     transaction.commit()
 
@@ -300,7 +251,7 @@ class Command(BaseCommand):
 
                         if not self.dryrun:
                             transaction.commit()
-                        print_status('Importing attributes.', count=i, total=total)
+                        self.print_progress('Importing attributes.', current_index_count=i, total_index_count=total_index_count)
 
                         if bulk_objects:
                             models.AttributeValue.objects.bulk_create(bulk_objects)
@@ -330,7 +281,7 @@ class Command(BaseCommand):
             ferr = StringIO()
             traceback.print_exc(file=ferr)
             error = ferr.getvalue()
-            print_status('Fatal error: %s' % (error,))
+            self.print_progress('Fatal error: %s' % (error,))
         finally:
             if self.dryrun:
                 print 'This is a dryrun, so no changes were committed.'
