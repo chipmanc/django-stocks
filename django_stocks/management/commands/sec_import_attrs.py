@@ -9,7 +9,6 @@ from optparse import make_option
 from StringIO import StringIO
 import traceback
 import random
-from multiprocessing import Process, Lock, Queue
 import collections
 
 from django.core.management.base import NoArgsCommand, BaseCommand
@@ -44,9 +43,9 @@ class Command(BaseCommand):
         make_option('--forms',
                     default='10-K,10-Q'),
         make_option('--start-year',
-                    default=None),
+                    default=datetime.now().year),
         make_option('--end-year',
-                    default=None),
+                    default=datetime.now().year),
         make_option('--quarter',
                     default=None),
         make_option('--dryrun',
@@ -58,94 +57,30 @@ class Command(BaseCommand):
         make_option('--verbose',
                     action='store_true',
                     default=False),
-        make_option('--multi',
-                    dest='multi',
-                    default=0,
-                    help=('The number of processes to use. '
-                          'Must be a multiple of 2.')),
-        make_option('--show-pending',
-                    action='store_true',
-                    default=False,
-                    help=('If given, will only report the number of '
-                          'pending records to process then exit.')),
     )
 
     def handle(self, **options):
-
         self.dryrun = options['dryrun']
         self.force = options['force']
         self.verbose = options['verbose']
+        self.forms = (options['forms'] or '').strip().split(',')
+        self.start_year = int(options['start_year'])
+        self.end_year = int(options['end_year'])
+        self.cik = (int(options['cik']) or None)
 
         self.stripe_counts = {} # {stripe:{current,total}
         self.last_progress_refresh = None
         self.start_times = {} # {key:start_time}
-
-        self.cik = (options['cik'] or '').strip()
-        if self.cik:
-            self.cik = int(self.cik)
-        else:
-            self.cik = None
-
-        self.forms = (options['forms'] or '').strip().split(',')
-
-        start_year = options['start_year']
-        if start_year:
-            start_year = int(start_year)
-        else:
-            start_year = 1900
-        self.start_year = start_year
-
-        end_year = options['end_year']
-        if end_year:
-            end_year = int(end_year)
-        else:
-            end_year = date.today().year
-        self.end_year = end_year
-
-        self.status = None
         self.progress = collections.OrderedDict()
-        multi = int(options['multi'])
         kwargs = options.copy()
-        if multi:
-            assert multi > 1 and is_power_of_two(multi), \
-                "Process count must be greater than 1 and a multiple of 2."
-            processes = []
-            self.status = Queue()
-            for i, _ in enumerate(xrange(multi)):
-                stripe = kwargs['stripe'] = '%i%i' % (i, multi)
-                kwargs['status'] = self.status
+        self.start_times[None] = time.time()
+        self.import_attributes(**kwargs)
 
-                connection.close()
-                p = Process(target=self.run_process, kwargs=kwargs)
-                p.daemon = True
-                processes.append(p)
-                p.start()
-            self.progress[stripe] = (0, 0, 0, 0, None, '')
-            while any(i.is_alive() for i in processes):
-                time.sleep(0.1)
-                while not self.status.empty():
-                    (stripe, current, total,
-                     sub_current, sub_total,
-                     eta, message) = self.status.get()
-                    self.progress[stripe] = (current, total,
-                                             sub_current, sub_total,
-                                             eta, message)
-                    if stripe not in self.start_times:
-                        self.start_times[stripe] = time.time()
-                    self.print_progress()
-            print 'All processes complete.'
-        else:
-            self.start_times[None] = time.time()
-            self.run_process(**kwargs)
-
-    def print_progress(self, clear=True, newline=True):
+    def print_progress(self):
         if (self.last_progress_refresh and 
             (datetime.now()-self.last_progress_refresh).seconds < 0.5):
             return
         bar_length = 10
-        if clear:
-            sys.stdout.write('\033[2J\033[H')
-            sys.stdout.write('Importing attributes\n')
         for (stripe, (current, total, sub_current,
                       sub_total, eta, message)) in sorted(self.progress.items()):
             sub_status = ''
@@ -170,7 +105,7 @@ class Command(BaseCommand):
             if sub_current and sub_total:
                 sub_status = '(subtask %s of %s) ' % (sub_current, sub_total)
             sys.stdout.write(
-                (('' if newline else '\r')+"%s [%s] %s of %s %s%s%% eta=%s: %s"+('\n' if newline else '')) \
+                ("%s [%s] %s of %s %s%s%% eta=%s: %s\n") \
                     % (stripe, bar, current, total, sub_status, percent, eta, message))
         sys.stdout.flush()
         self.last_progress_refresh = datetime.now()
@@ -181,24 +116,11 @@ class Command(BaseCommand):
             overall_current_count += current
             overall_total_count += total
 
-    def run_process(self, status=None, **kwargs):
-        tmp_debug = settings.DEBUG
-        settings.DEBUG = False
+
+    def import_attributes(self, **kwargs):
         transaction.enter_transaction_management()
         transaction.managed(True)
-        try:
-            self.import_attributes(status=status, **kwargs)
-        finally:
-            settings.DEBUG = tmp_debug
-            if self.dryrun:
-                print 'This is a dryrun, so no changes were committed.'
-                transaction.rollback()
-            else:
-                transaction.commit()
-            transaction.leave_transaction_management()
-            connection.close()
 
-    def import_attributes(self, status=None, **kwargs):
         stripe = kwargs.get('stripe')
         reraise = kwargs.get('reraise')
 
@@ -213,26 +135,14 @@ class Command(BaseCommand):
         def print_status(message, count=None, total=None):
             current_count = count or 0
             total_count = total or 0
-            if status:
-                status.put([
-                    stripe,
-                    current_count+1,
-                    total_count,
-                    sub_current,
-                    sub_total,
-                    estimated_completion_datetime,
-                    message,
-                ])
-            else:
-                self.progress[stripe] = (
-                    current_count,
-                    total_count,
-                    sub_current,
-                    sub_total,
-                    estimated_completion_datetime,
-                    message,
-                )
-                self.print_progress(clear=False, newline=True)
+            self.progress[stripe] = (
+                current_count,
+                total_count,
+                sub_current,
+                sub_total,
+                estimated_completion_datetime,
+                message)
+            self.print_progress()
 
         stripe_num, stripe_mod = parse_stripe(stripe)
         if stripe:
@@ -268,10 +178,6 @@ class Command(BaseCommand):
 
             total_count = total = q.count()
 
-            if kwargs['show_pending']:
-                print '='*80
-                print '%i total pending records' % total_count
-                return
 
             print_status('%i total rows.' % (total,))
             i = 0
@@ -426,5 +332,11 @@ class Command(BaseCommand):
             error = ferr.getvalue()
             print_status('Fatal error: %s' % (error,))
         finally:
+            if self.dryrun:
+                print 'This is a dryrun, so no changes were committed.'
+                transaction.rollback()
+            else:
+                transaction.commit()
+            transaction.leave_transaction_management()
             connection.close()
 

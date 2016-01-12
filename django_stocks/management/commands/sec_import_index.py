@@ -67,12 +67,9 @@ class Command(NoArgsCommand):
                         continue
                     quarter_start = date(year, quarter*3+1, 1)
                     reprocess_date = (quarter_start >
-                                      (date.today() -
-                                       timedelta(days=reprocess_n_days)))
+                            (date.today() - timedelta(days=reprocess_n_days)))
                     _reprocess = (reprocess or reprocess_date)
-                    get_filing_list.delay(year,
-                                          quarter+1,
-                                          reprocess=_reprocess)
+                    get_filing_list.delay(year, quarter+1, reprocess=_reprocess)
         finally:
             settings.DEBUG = tmp_debug
             transaction.commit()
