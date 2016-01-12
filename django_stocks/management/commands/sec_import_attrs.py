@@ -20,15 +20,6 @@ from django.utils import timezone
 from django_stocks import models
 from django_stocks.models import DATA_DIR, c
 
-try:
-    from psycopg2.extensions import TransactionRollbackError
-except ImportError:
-    TransactionRollbackError = Exception
-
-try:
-    from chroniker.models import Job
-except ImportError:
-    Job = None
 
 def is_power_of_two(x):
     return (x & (x - 1)) == 0
@@ -86,6 +77,7 @@ class Command(BaseCommand):
         self.verbose = options['verbose']
 
         self.stripe_counts = {} # {stripe:{current,total}
+        self.last_progress_refresh = None
         self.start_times = {} # {key:start_time}
 
         self.cik = (options['cik'] or '').strip()
@@ -100,7 +92,6 @@ class Command(BaseCommand):
         if start_year:
             start_year = int(start_year)
         else:
-            # start_year = date.today().year - 1
             start_year = 1900
         self.start_year = start_year
 
@@ -111,6 +102,7 @@ class Command(BaseCommand):
             end_year = date.today().year
         self.end_year = end_year
 
+        self.status = None
         self.progress = collections.OrderedDict()
         multi = int(options['multi'])
         kwargs = options.copy()
@@ -129,7 +121,6 @@ class Command(BaseCommand):
                 processes.append(p)
                 p.start()
             self.progress[stripe] = (0, 0, 0, 0, None, '')
-            # return
             while any(i.is_alive() for i in processes):
                 time.sleep(0.1)
                 while not self.status.empty():
@@ -147,15 +138,13 @@ class Command(BaseCommand):
             self.start_times[None] = time.time()
             self.run_process(**kwargs)
 
-    def print_progress(self):
-        last_status = None
-        status_secs = 3
-        if (last_status and 
-            (datetime.now()-last_status).seconds < status_secs):
+    def print_progress(self, clear=True, newline=True):
+        if (self.last_progress_refresh and 
+            (datetime.now()-self.last_progress_refresh).seconds < 0.5):
             return
         bar_length = 10
         if clear:
-            sys.stdout.write('\033[2J\033[H') # clear screen
+            sys.stdout.write('\033[2J\033[H')
             sys.stdout.write('Importing attributes\n')
         for (stripe, (current, total, sub_current,
                       sub_total, eta, message)) in sorted(self.progress.items()):
@@ -184,31 +173,21 @@ class Command(BaseCommand):
                 (('' if newline else '\r')+"%s [%s] %s of %s %s%s%% eta=%s: %s"+('\n' if newline else '')) \
                     % (stripe, bar, current, total, sub_status, percent, eta, message))
         sys.stdout.flush()
-        last_status = datetime.now()
+        self.last_progress_refresh = datetime.now()
 
-        # Update job.
         overall_current_count = 0
         overall_total_count = 0
         for stripe, (current, total) in self.stripe_counts.iteritems():
             overall_current_count += current
             overall_total_count += total
-        # print 'overall_current_count:',overall_current_count
-        # print 'overall_total_count:',overall_total_count
-        if overall_total_count and Job:
-            Job.update_progress(
-                total_parts_complete=overall_current_count,
-                total_parts=overall_total_count,
-            )
-            if not self.dryrun:
-                transaction.commit()
 
-    def run_process(self, **kwargs):
+    def run_process(self, status=None, **kwargs):
         tmp_debug = settings.DEBUG
         settings.DEBUG = False
         transaction.enter_transaction_management()
         transaction.managed(True)
         try:
-            self.import_attributes(**kwargs)
+            self.import_attributes(status=status, **kwargs)
         finally:
             settings.DEBUG = tmp_debug
             if self.dryrun:
@@ -219,7 +198,7 @@ class Command(BaseCommand):
             transaction.leave_transaction_management()
             connection.close()
 
-    def import_attributes(self, **kwargs):
+    def import_attributes(self, status=None, **kwargs):
         stripe = kwargs.get('stripe')
         reraise = kwargs.get('reraise')
 
@@ -234,15 +213,26 @@ class Command(BaseCommand):
         def print_status(message, count=None, total=None):
             current_count = count or 0
             total_count = total or 0
-            self.progress[stripe] = (
-                current_count,
-                total_count,
-                sub_current,
-                sub_total,
-                estimated_completion_datetime,
-                message,
-            )
-            self.print_progress()
+            if status:
+                status.put([
+                    stripe,
+                    current_count+1,
+                    total_count,
+                    sub_current,
+                    sub_total,
+                    estimated_completion_datetime,
+                    message,
+                ])
+            else:
+                self.progress[stripe] = (
+                    current_count,
+                    total_count,
+                    sub_current,
+                    sub_total,
+                    estimated_completion_datetime,
+                    message,
+                )
+                self.print_progress(clear=False, newline=True)
 
         stripe_num, stripe_mod = parse_stripe(stripe)
         if stripe:
@@ -291,7 +281,6 @@ class Command(BaseCommand):
                 i += 1
                 current_count = i
 
-                # print 'Processing index %s for (%i of %i)' % (ifile.filename, i, total)
                 msg = 'Processing index %s.' % (ifile.filename,)
                 print_status(msg, count=i, total=total)
 
@@ -301,7 +290,6 @@ class Command(BaseCommand):
                         transaction.commit()
 
                 ifile.download(verbose=self.verbose)
-                # print 'xbrl link:',ifile.xbrl_link()
 
                 # Initialize XBRL parser and populate an attribute called fields with
                 # a dict of 50 common terms.
@@ -323,26 +311,20 @@ class Command(BaseCommand):
 
                 maxretries = 10
                 retry = 0
-                # for retry in xrange(maxretries):
                 while 1:
                     try:
 
-                        # x.loadYear(2)
-                        # print'Year:', x.fields['FiscalYear']
                         company = ifile.company
                         max_text_len = 0
                         unique_attrs = set()
                         bulk_objects = []
                         prior_keys = set()
                         j = sub_total = 0
-                        # print
                         for node, sub_total in x.iter_namespace():
                             j += 1
                             sub_current = j
                             if not j % commit_freq:
-                                # print '\rImporting attribute %i of %i.' % (j, sub_total),
                                 print_status(msg, count=i, total=total)
-                                # sys.stdout.flush()
                                 if not self.dryrun:
                                     transaction.commit()
 
@@ -360,8 +342,6 @@ class Command(BaseCommand):
                             decimals = int(decimals)
                             max_text_len = max(max_text_len, len((node.text or '').strip()))
                             context_id = node.attrib['contextRef']
-                #            if context_id != 'D2009Q4YTD':
-                #                continue
                             start_date = x.get_context_start_date(context_id)
                             if not start_date:
                                 continue
@@ -384,9 +364,7 @@ class Command(BaseCommand):
                                 'Value too large, must be less than %i digits: %i %s' \
                                     % (c.MAX_QUANTIZE, len(value), repr(value))
 
-                            # print attribute
                             models.Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
-                            # print context_id,attribute.name,node.attrib['decimals'],unit,start_date,end_date,ifile.date
 
                             if models.AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date).exists():
                                 continue
@@ -416,8 +394,6 @@ class Command(BaseCommand):
 
                         if not self.dryrun:
                             transaction.commit()
-            #            print '\rImporting attribute %i of %i.' % (sub_total, sub_total),
-            #            print
                         print_status('Importing attributes.', count=i, total=total)
 
                         if bulk_objects:
@@ -443,14 +419,6 @@ class Command(BaseCommand):
                         connection.close()
                         time.sleep(random.random()*5)
 
-                    except TransactionRollbackError, e:
-                        if TransactionRollbackError.__name__ != 'TransactionRollbackError':
-                            raise
-                        if retry+1 == maxretries:
-                            raise
-                        print e, 'retry', retry
-                        connection.close()
-                        time.sleep(random.random()*5)
 
         except Exception, e:
             ferr = StringIO()
