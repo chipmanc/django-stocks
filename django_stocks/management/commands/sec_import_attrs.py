@@ -1,23 +1,17 @@
-import urllib
-import os
-import re
-import sys
-from zipfile import ZipFile
-import time
-from datetime import date, datetime, timedelta
-from optparse import make_option
-from StringIO import StringIO
-import traceback
-import random
 import collections
+from datetime import datetime
+from optparse import make_option
+import random
+import re
+from StringIO import StringIO
+import sys
+import time
+import traceback
 
-from django.core.management.base import NoArgsCommand, BaseCommand
-from django.db import transaction, connection, IntegrityError, DatabaseError
-from django.conf import settings
-from django.utils import timezone
+from django.core.management.base import BaseCommand
+from django.db import transaction, connection, DatabaseError
 
 from django_stocks import models
-from django_stocks.models import DATA_DIR, c
 
 
 def is_power_of_two(x):
@@ -29,13 +23,16 @@ class Command(BaseCommand):
     args = ''
     option_list = BaseCommand.option_list + (
         make_option('--cik',
+                    type=int,
                     default=None),
         make_option('--forms',
                     default='10-K,10-Q'),
         make_option('--start-year',
-                    default=datetime.now().year),
+                    default=datetime.now().year,
+                    type=int),
         make_option('--end-year',
-                    default=datetime.now().year),
+                    default=datetime.now().year,
+                    type=int),
         make_option('--quarter',
                     default=None),
         make_option('--dryrun',
@@ -50,30 +47,16 @@ class Command(BaseCommand):
     )
 
     def handle(self, **options):
-        self.dryrun = options['dryrun']
-        self.force = options['force']
-        self.verbose = options['verbose']
-        self.forms = (options['forms'] or '').strip().split(',')
-        self.start_year = int(options['start_year'])
-        self.end_year = int(options['end_year'])
-        self.cik = (int(options['cik']) or None)
 
-        self.stripe_counts = {}
-        self.start_times = {}
-        self.progress = collections.OrderedDict()
         kwargs = options.copy()
-        self.start_times[None] = time.time()
         self.import_attributes(**kwargs)
 
-    def print_progress(self, message, current_index_count=0, total_index_count=0, sub_current=0, sub_total=0):
-        last_progress_refresh = None
-
-        if (last_progress_refresh and 
-            (datetime.now()-last_progress_refresh).seconds < 0.5):
-            return
+    def print_progress(self, message,
+                       current_count=0, total_count=0,
+                       sub_current=0, sub_total=0):
         bar_length = 10
-        if total_index_count:
-            percent = current_index_count / float(total_index_count)
+        if total_count:
+            percent = current_count / float(total_count)
             bar = ('=' * int(percent * bar_length)).ljust(bar_length)
             percent = int(percent * 100)
         else:
@@ -86,24 +69,17 @@ class Command(BaseCommand):
         else:
             sub_status = ''
 
-        sys.stdout.write("[%s] %s of %s %s%s%%  %s\n" \
-                      % (bar, current_index_count, total_index_count, sub_status, percent, message))
+        sys.stdout.write("[%s] %s of %s %s%s%%  %s\n"
+                         % (bar, current_count, total_count, sub_status, percent, message))
         sys.stdout.flush()
-        last_progress_refresh = datetime.now()
-
-
 
     def import_attributes(self, **kwargs):
+        kwargs['forms'] = kwargs['forms'].split(',')
         transaction.enter_transaction_management()
         transaction.managed(True)
 
-        current_count = 0
-        fatal_errors = False
-        fatal_error = None
-        estimated_completion_datetime = None
         sub_current = 0
         sub_total = 0
-
 
         try:
             # Get a file from the index.
@@ -112,44 +88,33 @@ class Command(BaseCommand):
             # the first time we try to access it, or you can call
             # .download() explicitly.
             q = models.Index.objects.filter(
-                year__gte=self.start_year,
-                year__lte=self.end_year)
-            if not self.force:
+                year__gte=kwargs['start_year'],
+                year__lte=kwargs['end_year'])
+            if not kwargs['force']:
                 q = q.filter(
-                    attributes_loaded__exact=0,  # False,
-                    valid__exact=1,  # True,
-                )
-            if self.forms:
-                q = q.filter(form__in=self.forms)
+                    attributes_loaded__exact=0,
+                    valid__exact=1,)
+            if kwargs['forms']:
+                q = q.filter(form__in=kwargs['forms'])
+            if kwargs['cik']:
+                q = q.filter(company__cik=kwargs['cik'])
+            if not kwargs['force']:
+                q = q.filter(company__load=True)
+            if not q.count():
+                print>>sys.stderr, ('Warning: the company you specified with cik %s is '
+                                    'either not marked for loading or does not exist.') % (kwargs['cik'])
 
-            if self.cik:
-                q = q.filter(company__cik=self.cik,
-                             company__load=True)
-                if not q.count():
-                    print>>sys.stderr, ('Warning: the company you specified with cik %s is '
-                                       'either not marked for loading or does not exist.') % (self.cik)
-
-
-            total_index_count = q.count()
-            self.print_progress('%i total rows.\n' % (total_index_count))
-            i = 0
-            commit_freq = 100
+            total_count = q.count()
+            current_count = 0
+            commit_freq = 300
             for ifile in q.iterator():
-                i += 1
-                current_count = i
+                current_count += 1
 
                 msg = 'Processing index %s.' % (ifile.filename,)
-                self.print_progress(msg, current_index_count=i, total_index_count=total_index_count)
+                self.print_progress(msg, current_count, total_count)
 
-                if not i % commit_freq:
-                    sys.stdout.flush()
-                    if not self.dryrun:
-                        transaction.commit()
+                ifile.download(verbose=kwargs['verbose'])
 
-                ifile.download(verbose=self.verbose)
-
-                # Initialize XBRL parser and populate an attribute called fields with
-                # a dict of 50 common terms.
                 x = None
                 error = None
                 try:
@@ -158,32 +123,30 @@ class Command(BaseCommand):
                     ferr = StringIO()
                     traceback.print_exc(file=ferr)
                     error = ferr.getvalue()
+                    print error
+                    models.Index.objects.filter(id=ifile.id).update(valid=False, error=error)
 
                 if x is None:
-                    if error is None:
-                        error = 'No XBRL found.'
-                    models.Index.objects.filter(id=ifile.id)\
-                        .update(valid=False, error=error)
+                    error = 'No XBRL found.'
+                    models.Index.objects.filter(id=ifile.id).update(valid=False, error=error)
                     continue
 
                 maxretries = 10
                 retry = 0
                 while 1:
                     try:
-
                         company = ifile.company
-                        max_text_len = 0
-                        unique_attrs = set()
                         bulk_objects = []
                         prior_keys = set()
-                        j = sub_total = 0
+                        sub_current = 0
                         for node, sub_total in x.iter_namespace():
-                            j += 1
-                            sub_current = j
-                            if not j % commit_freq:
-                                self.print_progress(msg, current_index_count=i, total_index_count=total_index_count)
-                                if not self.dryrun:
-                                    transaction.commit()
+                            sub_current += 1
+                            if not sub_current % commit_freq:
+                                self.print_progress(msg,
+                                                    current_count,
+                                                    total_count,
+                                                    sub_current,
+                                                    sub_total)
 
                             matches = re.findall('^\{([^\}]+)\}(.*)$', node.tag)
                             if matches:
@@ -191,13 +154,15 @@ class Command(BaseCommand):
                             else:
                                 ns = None
                                 attr_name = node
+
                             decimals = node.attrib.get('decimals', None)
                             if decimals is None:
                                 continue
-                            if decimals.upper() == 'INF':
+                            elif decimals.upper() == 'INF':
                                 decimals = 6
-                            decimals = int(decimals)
-                            max_text_len = max(max_text_len, len((node.text or '').strip()))
+                            else:
+                                decimals = int(decimals)
+
                             context_id = node.attrib['contextRef']
                             start_date = x.get_context_start_date(context_id)
                             if not start_date:
@@ -206,33 +171,23 @@ class Command(BaseCommand):
                             if not end_date:
                                 continue
                             namespace, _ = models.Namespace.objects.get_or_create(name=ns.strip())
-                            attribute, _ = models.Attribute.objects.get_or_create(
-                                namespace=namespace,
-                                name=attr_name,
-                                defaults=dict(load=True),
-                            )
+                            attribute, _ = models.Attribute.objects.get_or_create(namespace=namespace,
+                                                                                  name=attr_name,
+                                                                                  defaults=dict(load=True))
                             if not attribute.load:
                                 continue
                             unit, _ = models.Unit.objects.get_or_create(name=node.attrib['unitRef'].strip())
                             value = (node.text or '').strip()
                             if not value:
                                 continue
-                            assert len(value.split('.')[0]) <= c.MAX_QUANTIZE, \
+                            assert len(value.split('.')[0]) <= models.c.MAX_QUANTIZE, \
                                 'Value too large, must be less than %i digits: %i %s' \
-                                    % (c.MAX_QUANTIZE, len(value), repr(value))
+                                % (models.c.MAX_QUANTIZE, len(value), repr(value))
 
                             models.Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
 
                             if models.AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date).exists():
                                 continue
-
-                            # Some attributes are listed multiple times in differently
-                            # named contexts even though the value and date ranges are
-                            # identical.
-                            key = (company, attribute, start_date)
-                            if key in prior_keys:
-                                continue
-                            prior_keys.add(key)
 
                             bulk_objects.append(models.AttributeValue(
                                 company=company,
@@ -249,9 +204,9 @@ class Command(BaseCommand):
                                 bulk_objects = []
                                 prior_keys.clear()
 
-                        if not self.dryrun:
+                        if not kwargs['dryrun']:
                             transaction.commit()
-                        self.print_progress('Importing attributes.', current_index_count=i, total_index_count=total_index_count)
+                        self.print_progress('Importing attributes.', current_count, total_count)
 
                         if bulk_objects:
                             models.AttributeValue.objects.bulk_create(bulk_objects)
@@ -259,12 +214,10 @@ class Command(BaseCommand):
 
                         ticker = ifile.ticker()
                         models.Index.objects.filter(id=ifile.id).update(attributes_loaded=True, _ticker=ticker)
-
                         models.Attribute.do_update()
-
                         models.Unit.do_update()
 
-                        if not self.dryrun:
+                        if not kwargs['dryrun']:
                             transaction.commit()
 
                         break
@@ -276,18 +229,16 @@ class Command(BaseCommand):
                         connection.close()
                         time.sleep(random.random()*5)
 
-
         except Exception, e:
             ferr = StringIO()
             traceback.print_exc(file=ferr)
             error = ferr.getvalue()
             self.print_progress('Fatal error: %s' % (error,))
         finally:
-            if self.dryrun:
+            if kwargs['dryrun']:
                 print 'This is a dryrun, so no changes were committed.'
                 transaction.rollback()
             else:
                 transaction.commit()
             transaction.leave_transaction_management()
             connection.close()
-
