@@ -76,14 +76,10 @@ def get_filing_list(year, quarter, reprocess=False):
     company_add_count = 0
     for r in lines[10:]:  # Note, first 10 lines are useless headers.
         i += 1
-        if (not reprocess
-                and ifile.processed_rows
-                and i < ifile.processed_rows):
+        if (not reprocess and ifile.processed_rows and i < ifile.processed_rows):
             continue
-        if (not last_status or
-                ((datetime.now() - last_status).seconds >= status_secs)):
-            print ('\rProcessing record '
-                   '%i of %i (%.02f%%).') % (i, total, float(i)/total*100)
+        if (not last_status or ((datetime.now() - last_status).seconds >= status_secs)):
+            print ('\rProcessing record ' '%i of %i (%.02f%%).') % (i, total, float(i)/total*100)
             sys.stdout.flush()
             last_status = datetime.now()
             IndexFile.objects.filter(id=ifile.id).update(processed_rows=i)
@@ -101,13 +97,10 @@ def get_filing_list(year, quarter, reprocess=False):
         except:
             company_add_count += 1
             prior_ciks.add(cik)
-            bulk_companies.append(Company(cik=cik,
-                                  name=force_text(name, errors='replace')))
+            bulk_companies.append(Company(cik=cik, name=force_text(name, errors='replace')))
 
         filename = r[98:].strip()
-        if Index.objects.filter(company__cik=cik,
-                                date=dt,
-                                filename=filename).exists():
+        if Index.objects.filter(company__cik=cik, date=dt, filename=filename).exists():
             continue
         index_add_count += 1
         bulk_indexes.append(Index(
@@ -140,3 +133,8 @@ def get_filing_list(year, quarter, reprocess=False):
     print '%i new indexes found.' % index_add_count
     sys.stdout.flush()
     IndexFile.objects.filter(id=ifile.id).update(processed_rows=total)
+
+
+@shared_task
+def import_attrs():
+    pass

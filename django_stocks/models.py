@@ -442,7 +442,6 @@ class Index(models.Model):
         x.fields['PeriodStartDate'] = x.fields['IncomeStatementPeriodYTD']
         x.fields['SECFilingPage'] = self.index_link()
         x.fields['LinkToXBRLInstance'] = self.xbrl_link() 
-
         return x
         
     def ticker(self):

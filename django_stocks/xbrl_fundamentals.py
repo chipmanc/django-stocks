@@ -1,34 +1,7 @@
-
 class FundamentantalAccountingConcepts:               
-
-    def __init__(self,xbrl):               
-
+    def __init__(self, xbrl):               
         self.xbrl = xbrl
 
-
-#        print " "
-#        print "FUNDAMENTAL ACCOUNTING CONCEPTS CHECK REPORT:"
-#        print "XBRL instance: %s" % self.xbrl.XBRLInstanceLocation
-#        print "XBRL Cloud Viewer: https://edgardashboard.xbrlcloud.com/flex/viewer/XBRLViewer.html#instance=%s" % self.xbrl.XBRLInstanceLocation
-#        
-#        print "Entity regiant name: %s" % self.xbrl.fields['EntityRegistrantName']
-#        print "CIK: %s" % self.xbrl.fields['EntityCentralIndexKey']
-#        print "Entity filer category: %s" % self.xbrl.fields['EntityFilerCategory']
-#        print "Trading symbol: %s" % self.xbrl.fields['TradingSymbol']
-#        print "Fiscal year: %s" % self.xbrl.fields['DocumentFiscalYearFocus']
-#        print "Fiscal period: %s" % self.xbrl.fields['DocumentFiscalPeriodFocus']
-#        print "Document type: %s" % self.xbrl.fields['DocumentType']
-#        
-#        print "Balance Sheet Date (document period end date): %s" % self.xbrl.fields['BalanceSheetDate']
-#        print "Income Statement Period (YTD, current period, period start date): %s to %s" % (self.xbrl.fields['IncomeStatementPeriodYTD'], self.xbrl.fields['BalanceSheetDate'])
-#        
-#        print "Context ID for document period focus (instants): %s" % self.xbrl.fields['ContextForInstants']
-#        print "Context ID for YTD period (durations): %s" % self.xbrl.fields['ContextForDurations']
-#        print " "
-
-       
-        
-        
         #Assets
         self.xbrl.fields['Assets'] = self.xbrl.GetFactValue("us-gaap:Assets", "Instant")
         if self.xbrl.fields['Assets']== None:
