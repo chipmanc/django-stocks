@@ -1,4 +1,4 @@
-Django-SEC
+Django-Stocks
 ==========
 
 This is a Django app that downloads all SEC filings from the EDGAR database
@@ -14,7 +14,7 @@ Installation
 
 Install the package using pip via:
 
-    pip install https://github.com/chipmanc/django-sec
+    pip install https://github.com/chipmanc/django-stocks
 
 then add `django_stocks` to your `INSTALLED_APPS` and run:
 
@@ -62,3 +62,12 @@ Currently, this has only been tested to download and extract attributes from
 The commands support additional parameters and filters, such as to load data
 for specific companies or quarters. Run `python manage help sec_import_index`
 to see all options.
+
+Future features
+---------------
+
+Celery integration to run concurrently across a cluster of servers
+Refactor code to use better design pattern
+Create tests
+Start Documentation
+
