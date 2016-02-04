@@ -70,4 +70,3 @@ Future features
 * Refactor code to use better design pattern
 * Create tests
 * Start Documentation
-
