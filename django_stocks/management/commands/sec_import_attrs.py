@@ -137,7 +137,6 @@ class Command(BaseCommand):
                     try:
                         company = ifile.company
                         bulk_objects = []
-                        prior_keys = set()
                         sub_current = 0
                         for node, sub_total in x.iter_namespace():
                             sub_current += 1
@@ -202,7 +201,6 @@ class Command(BaseCommand):
                             if not len(bulk_objects) % commit_freq:
                                 models.AttributeValue.objects.bulk_create(bulk_objects)
                                 bulk_objects = []
-                                prior_keys.clear()
 
                         if not kwargs['dryrun']:
                             transaction.commit()
