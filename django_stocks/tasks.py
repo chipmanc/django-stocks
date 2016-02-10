@@ -5,7 +5,9 @@ import urllib
 import os
 import re
 import sys
+from StringIO import StringIO
 import time
+import traceback
 from zipfile import ZipFile
 from datetime import date, datetime
 
@@ -139,21 +141,10 @@ def get_filing_list(year, quarter, reprocess=False):
             quarter=quarter,
             filename=filename,
         ))
-        if len(bulk_indexes) % bulk_commit_freq:
-            if len(bulk_companies):
-                Company.objects.bulk_create(bulk_companies)
-                bulk_companies = []
-            Index.objects.bulk_create(bulk_indexes)
-            bulk_indexes = []
-            transaction.commit()
 
-    if bulk_indexes:
-        if len(bulk_companies):
-            Company.objects.bulk_create(bulk_companies)
-            bulk_companies = []
-        Index.objects.bulk_create(bulk_indexes)
+    Company.objects.bulk_create(bulk_companies, batch_size=1000)
+    Index.objects.bulk_create(bulk_indexes, batch_size=1000)
     IndexFile.objects.filter(id=ifile.id).update(processed=timezone.now())
-    transaction.commit()
 
     print '\rProcessing record %i of %i (%.02f%%).' % (total, total, 100),
     print
@@ -198,8 +189,7 @@ def import_attrs(**kwargs):
     while 1:
         try:
             company = ifile.company
-            bulk_objects = []
-            prior_keys = set()
+            bulk_objects = set()
             sub_current = 0
             for node, sub_total in x.iter_namespace():
                 sub_current += 1
@@ -248,11 +238,9 @@ def import_attrs(**kwargs):
                     % (MAX_QUANTIZE, len(value), repr(value))
 
                 Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
-
-                if AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date).exists():
+                if AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date, end_date=end_date).exists():
                     continue
-
-                bulk_objects.append(AttributeValue(
+                bulk_objects.add(AttributeValue(
                     company=company,
                     attribute=attribute,
                     start_date=start_date,
@@ -262,17 +250,8 @@ def import_attrs(**kwargs):
                     filing_date=ifile.date,
                 ))
 
-                if not len(bulk_objects) % commit_freq:
-                    AttributeValue.objects.bulk_create(bulk_objects)
-                    bulk_objects = []
-                    prior_keys.clear()
-
-            if not kwargs['dryrun']:
-                transaction.commit()
-            print_progress('Importing attributes.', current_count, total_count)
-
             if bulk_objects:
-                AttributeValue.objects.bulk_create(bulk_objects)
+                AttributeValue.objects.bulk_create(bulk_objects, batch_size=1000)
                 bulk_objects = []
 
             ticker = ifile.ticker()
@@ -286,8 +265,6 @@ def import_attrs(**kwargs):
             break
 
         except DatabaseError, e:
-            if retry+1 == maxretries:
-                raise
-            print e, 'retry', retry
+            print e
             connection.close()
-            time.sleep(random.random()*5)
+    print_progress('Importing attributes.', current_count, total_count)
