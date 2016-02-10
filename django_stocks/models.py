@@ -438,8 +438,6 @@ class Index(models.Model):
         x = xbrl.XBRL(filepath, opener=open_method)
         x.fields['FiscalPeriod'] = x.fields['DocumentFiscalPeriodFocus']
         x.fields['FiscalYear'] = x.fields['DocumentFiscalYearFocus']
-        x.fields['DocumentPeriodEndDate'] = x.fields['BalanceSheetDate']
-        x.fields['PeriodStartDate'] = x.fields['IncomeStatementPeriodYTD']
         x.fields['SECFilingPage'] = self.index_link()
         x.fields['LinkToXBRLInstance'] = self.xbrl_link() 
         return x
