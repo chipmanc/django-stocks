@@ -71,4 +71,3 @@ Future features
 * Create tests
 * Start Documentation
 * Migrate to Django 1.9 +
-
