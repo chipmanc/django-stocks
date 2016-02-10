@@ -18,9 +18,11 @@ class Command(NoArgsCommand):
             "of thousands of filings; will take a while to run.")
     option_list = NoArgsCommand.option_list + (
         make_option('--start-year',
-                    default=None),
+                    default=date.today().year,
+                    type=int),
         make_option('--end-year',
-                    default=None),
+                    default=date.today().year,
+                    type=int),
         make_option('--quarter',
                     default=None),
         make_option('--delete-prior-indexes',
@@ -31,37 +33,23 @@ class Command(NoArgsCommand):
                     default=False),
         make_option('--reprocess-n-days',
                     default=14,
+                    type=int,
                     help='The number of days to automatically '
                          'redownload and reprocess index files.'),)
 
     def handle_noargs(self, **options):
 
-        start_year = options['start_year']
-        if start_year:
-            start_year = int(start_year)
-        else:
-            start_year = date.today().year - 1
-
-        end_year = options['end_year']
-        if end_year:
-            end_year = int(end_year) + 1
-        else:
-            end_year = date.today().year + 1
-
         reprocess = options['reprocess']
+        reprocess_n_days = options['reprocess_n_days']
 
         target_quarter = options['quarter']
         if target_quarter:
             target_quarter = int(target_quarter)
 
-        reprocess_n_days = int(options['reprocess_n_days'])
-
-        tmp_debug = settings.DEBUG
-        settings.DEBUG = False
         transaction.enter_transaction_management()
         transaction.managed(True)
         try:
-            for year in range(start_year, end_year):
+            for year in range(options['start_year'], options['end_year']):
                 for quarter in range(4):
                     if target_quarter and quarter+1 != target_quarter:
                         continue
@@ -71,7 +59,6 @@ class Command(NoArgsCommand):
                     _reprocess = (reprocess or reprocess_date)
                     get_filing_list.delay(year, quarter+1, reprocess=_reprocess)
         finally:
-            settings.DEBUG = tmp_debug
             transaction.commit()
             transaction.leave_transaction_management()
             connection.close()
