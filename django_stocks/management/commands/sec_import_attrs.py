@@ -1,6 +1,5 @@
 import collections
 from datetime import datetime
-from optparse import make_option
 import random
 import re
 from StringIO import StringIO
@@ -9,70 +8,39 @@ import time
 import traceback
 
 from django.core.management.base import BaseCommand
-from django.db import transaction, connection, DatabaseError
+from django.db import DatabaseError
 
 from django_stocks import models
 from django_stocks.tasks import import_attrs
 
 
-def is_power_of_two(x):
-    return (x & (x - 1)) == 0
-
-
 class Command(BaseCommand):
-    help = "Shows data from filings."
-    args = ''
-    option_list = BaseCommand.option_list + (
-        make_option('--cik',
-                    type=int,
-                    default=None),
-        make_option('--forms',
-                    default='10-K,10-Q'),
-        make_option('--start-year',
-                    default=datetime.now().year,
-                    type=int),
-        make_option('--end-year',
-                    default=datetime.now().year,
-                    type=int),
-        make_option('--quarter',
-                    default=None),
-        make_option('--dryrun',
-                    action='store_true',
-                    default=False),
-        make_option('--force',
-                    action='store_true',
-                    default=False),
-        make_option('--verbose',
-                    action='store_true',
-                    default=False),
-    )
+    def add_arguments(self, parser):
+        parser.add_argument('--cik',
+                            type=int,
+                            default=None)
+        parser.add_argument('--forms',
+                            default='10-K,10-Q')
+        parser.add_argument('--start-year',
+                            default=datetime.now().year,
+                            type=int)
+        parser.add_argument('--end-year',
+                            default=datetime.now().year,
+                            type=int)
+        parser.add_argument('--quarter',
+                            default=None)
+        parser.add_argument('--dryrun',
+                            action='store_true',
+                            default=False)
+        parser.add_argument('--force',
+                            action='store_true',
+                            default=False)
+        parser.add_argument('--verbose',
+                            action='store_true',
+                            default=False)
 
-    def print_progress(self, message,
-                       current_count=0, total_count=0,
-                       sub_current=0, sub_total=0):
-        bar_length = 10
-        if total_count:
-            percent = current_count / float(total_count)
-            bar = ('=' * int(percent * bar_length)).ljust(bar_length)
-            percent = int(percent * 100)
-        else:
-            sys.stdout.write(message)
-            sys.stdout.flush()
-            return
-
-        if sub_current and sub_total:
-            sub_status = '(subtask %s of %s) ' % (sub_current, sub_total)
-        else:
-            sub_status = ''
-
-        sys.stdout.write("[%s] %s of %s %s%s%%  %s\n"
-                         % (bar, current_count, total_count, sub_status, percent, message))
-        sys.stdout.flush()
-
-    def handle(self, **options):
+    def handle(self, *args, **options):
         options['forms'] = options['forms'].split(',')
-        transaction.enter_transaction_management()
-        transaction.managed(True)
 
         sub_current = 0
         sub_total = 0
@@ -114,11 +82,3 @@ class Command(BaseCommand):
             traceback.print_exc(file=ferr)
             error = ferr.getvalue()
             self.print_progress('Fatal error: %s' % (error,))
-        finally:
-            if options['dryrun']:
-                print 'This is a dryrun, so no changes were committed.'
-                transaction.rollback()
-            else:
-                transaction.commit()
-            transaction.leave_transaction_management()
-            connection.close()

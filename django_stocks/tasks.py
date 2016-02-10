@@ -11,7 +11,7 @@ import traceback
 from zipfile import ZipFile
 from datetime import date, datetime
 
-from django.db import connection, transaction, DatabaseError
+from django.db import DatabaseError
 from django.utils import timezone
 from django.utils.encoding import force_text
 
@@ -51,6 +51,7 @@ def get_filing_list(year, quarter, reprocess=False):
     """
     url = ('ftp://ftp.sec.gov/edgar/full-index/%d'
            '/QTR%d/company.zip') % (year, quarter)
+    print url
 
     # Download the data and save to a file
     if not os.path.isdir(DATA_DIR):
@@ -82,7 +83,6 @@ def get_filing_list(year, quarter, reprocess=False):
     if not ifile.downloaded:
         ifile.downloaded = timezone.now()
     ifile.save()
-    transaction.commit()
 
     # Extract the compressed file
     print 'Opening index file %s.' % (fn,)
@@ -258,13 +258,8 @@ def import_attrs(**kwargs):
             Index.objects.filter(id=ifile.id).update(attributes_loaded=True, _ticker=ticker)
             Attribute.do_update()
             Unit.do_update()
-
-            if not kwargs['dryrun']:
-                transaction.commit()
-
             break
 
         except DatabaseError, e:
             print e
-            connection.close()
     print_progress('Importing attributes.', current_count, total_count)

@@ -168,7 +168,7 @@ class XBRL:
         entity = ' and (xbrli:entity'
         segment = '[not (xbrli:segment)])]'
         xpath = context + period + instant + text + entity + segment
-        self.fields['ContextForInstants'] = self.oInstance.xpath(xpath,namespaces=x.ns)[0].get('id')
+        self.fields['ContextForInstants'] = self.oInstance.xpath(xpath,namespaces=self.ns)[0].get('id')
 
     def get_context_start_date(self, context_id):
         if context_id not in self._context_start_dates:
@@ -258,7 +258,7 @@ class XBRL:
 # We want the child period that is instance type --> "[(xbrli:period[xbrli:instant"
 # With text value of DocumentPeriodEndDate --> '[text()="{0}"]])'.format(x.fields['DocumentPeriodEndDate']
 # But there are many contextRefs with this date.  We want the "root" one with no segments --> "and (xbrli:entity[not (xbrli:segment)])]"
-y='//xbrli:context[(xbrli:period[xbrli:instant[text()="{0}"]]) and (xbrli:entity[not (xbrli:segment)])]'.format(x.fields['DocumentPeriodEndDate'])
-x.oInstance.xpath(y,namespaces=x.ns)
+#y='//xbrli:context[(xbrli:period[xbrli:instant[text()="{0}"]]) and (xbrli:entity[not (xbrli:segment)])]'.format(x.fields['DocumentPeriodEndDate'])
+#x.oInstance.xpath(y,namespaces=x.ns)
 
 
