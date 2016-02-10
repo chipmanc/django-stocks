@@ -66,8 +66,8 @@ to see all options.
 Future features
 ---------------
 
-Celery integration to run concurrently across a cluster of servers
-Refactor code to use better design pattern
-Create tests
-Start Documentation
-
+* Celery integration to run concurrently across a cluster of servers
+* Refactor code to use better design pattern
+* Create tests
+* Start Documentation
+* Migrate to Django 1.9 +
