@@ -2,7 +2,7 @@
 import os
 import urllib
 
-from setuptools import setup, find_packages, Command
+from setuptools import setup, find_packages
 
 import django_stocks
 
