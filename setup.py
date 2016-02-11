@@ -27,5 +27,5 @@ setup(
         'Framework :: Django',
     ],
     zip_safe = False,
-    install_requires = ['Django>=1.8.0', 'lxml'],
+    install_requires = ['django>=1.8.0', 'lxml', 'celery==3.1.18', 'MySQL-python==1.2.5'],
 )
