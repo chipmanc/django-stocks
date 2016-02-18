@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 from setuptools import setup, find_packages
 
-import django_stocks
-
 setup(
     name = "django-stocks",
-    version = django_stocks.__version__,
+    version = "0.4.3"
     packages = find_packages(),
     author = "Chris Chipman",
     author_email = "chipmanc@bellsouth.net",
