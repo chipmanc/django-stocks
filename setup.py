@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "django-stocks",
-    version = "0.4.3",
+    version = "0.4.4",
     packages = find_packages(),
     author = "Chris Chipman",
     author_email = "chipmanc@bellsouth.net",
@@ -26,5 +26,7 @@ setup(
                         'lxml',
                         'mock',
                         'celery==3.1.18',
+                        'setuptools>=17.1',
+                        'pip>=1.4.1',
                         'MySQL-python==1.2.5'],
 )
