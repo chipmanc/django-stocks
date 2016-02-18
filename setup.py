@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-import os
-import urllib
-
 from setuptools import setup, find_packages
 
 import django_stocks
