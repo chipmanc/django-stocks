@@ -11,73 +11,53 @@ except ImportError, e:
 import forms
 import models
 
+
 class NamespaceAdmin(admin.ModelAdmin):
+    list_display = ('name',)
     
-    list_display = (
-        'name',
-    )
-    
-    search_fields = (
-        'name',
-    )
+    search_fields = ('name',)
+
 
 admin.site.register(
     models.Namespace,
     NamespaceAdmin)
 
+
 class UnitAdmin(admin.ModelAdmin):
-    
     form = forms.UnitChangeForm
     
-    list_display = (
-        'name',
-        'master',
-    )
+    list_display = ('name',
+                    'master',)
     
-    list_filter = (
-        'master',
-    )
+    list_filter = ('master',)
     
-    readonly_fields = (
-        'master',
-    )
+    readonly_fields = ('master',)
     
-    search_fields = (
-        'name',
-    )
+    search_fields = ('name',)
+
 
 admin.site.register(
     models.Unit,
     UnitAdmin)
 
+
 class AttributeAdmin(admin.ModelAdmin):
+    list_display = ('name',
+                    'namespace',
+                    'load',
+                    'total_values_fresh',
+                    'total_values',)
     
-    list_display = (
-        'name',
-        'namespace',
-        'load',
-        'total_values_fresh',
-        'total_values',
-    )
+    list_filter = ('load',
+                   'total_values_fresh',)
     
-    list_filter = (
-        'load',
-        'total_values_fresh',
-    )
+    search_fields = ('name',)
     
-    search_fields = (
-        'name',
-    )
+    readonly_fields = ('total_values',)
     
-    readonly_fields = (
-        'total_values',
-    )
-    
-    actions = (
-        'enable_load',
-        'disable_load',
-        'refresh_total_values',
-    )
+    actions = ('enable_load',
+               'disable_load',
+               'refresh_total_values',)
     
     def queryset(self, *args, **kwargs):
         qs = super(AttributeAdmin, self).queryset(*args, **kwargs)
@@ -99,43 +79,34 @@ class AttributeAdmin(admin.ModelAdmin):
         models.Attribute.do_update()
     refresh_total_values.short_description = 'Refresh to total values count of selected %(verbose_name_plural)s'
 
+
 admin.site.register(
     models.Attribute,
     AttributeAdmin)
 
+
 class AttributeValueAdmin(admin.ModelAdmin):
+    list_display = ('company_name',
+                    'attribute_name',
+                    'value',
+                    'true_unit',
+                    'start_date',
+                    'end_date',
+                    'filing_date',
+                    'attribute_total_values',)
     
-    list_display = (
-        'company_name',
-        'attribute_name',
-        'value',
-        'true_unit',
-        'start_date',
-        'end_date',
-        'filing_date',
-        'attribute_total_values',
-    )
+    raw_id_fields = ('company',
+                     'attribute',)
     
-    raw_id_fields = (
-        'company',
-        'attribute',
-    )
+    search_fields = ('company__name',
+                     'attribute__name',)
     
-    search_fields = (
-        'company__name',
-        'attribute__name',
-    )
+    readonly_fields = ('company_name',
+                       'attribute_name',
+                       'attribute_total_values',
+                       'true_unit',)
     
-    readonly_fields = (
-        'company_name',
-        'attribute_name',
-        'attribute_total_values',
-        'true_unit',
-    )
-    
-    exclude = (
-        'unit',
-    )
+    exclude = ('unit',)
     
     def queryset(self, *args, **kwargs):
         qs = super(AttributeValueAdmin, self).queryset(*args, **kwargs)
@@ -165,43 +136,34 @@ class AttributeValueAdmin(admin.ModelAdmin):
         return obj.attribute.total_values
     attribute_total_values.admin_order_field = 'attribute__total_values'
 
+
 admin.site.register(
     models.AttributeValue,
     AttributeValueAdmin)
 
+
 class CompanyAdmin(admin.ModelAdmin):
+    list_display = ('cik',
+                    'name',
+                    'min_date',
+                    'max_date',
+                    'load',)
     
-    list_display = (
-        'cik',
-        'name',
-        'min_date',
-        'max_date',
-        'load',
-    )
+    list_filter = ('load',)
     
-    list_filter = (
-        'load',
-    )
+    search_fields = ('cik',
+                     'name',
+                     '_ticker',)
     
-    search_fields = (
-        'cik',
-        'name',
-        '_ticker',
-    )
+    readonly_fields = ('cik',
+                       'name',
+                       'filings_link',
+                       'values_link',
+                       'min_date',
+                       'max_date',)
     
-    readonly_fields = (
-        'cik',
-        'name',
-        'filings_link',
-        'values_link',
-        'min_date',
-        'max_date',
-    )
-    
-    actions = (
-        'enable_load',
-        'disable_load',
-    )
+    actions = ('enable_load',
+               'disable_load',)
     
     def lookup_allowed(self, key, value):
         return True
@@ -243,29 +205,24 @@ class CompanyAdmin(admin.ModelAdmin):
     values_link.short_description = 'attributes'
     values_link.allow_tags = True
 
+
 admin.site.register(
     models.Company,
     CompanyAdmin)
 
+
 class IndexFileAdmin(admin.ModelAdmin):
+    list_display = ('year',
+                    'quarter',
+                    'total_rows',
+                    'processed_rows',
+                    'percent_processed',
+                    'downloaded',
+                    'processed',)
     
-    list_display = (
-        'year',
-        'quarter',
-        'total_rows',
-        'processed_rows',
-        'percent_processed',
-        'downloaded',
-        'processed',
-    )
+    readonly_fields = ('percent_processed',)
     
-    readonly_fields = (
-        'percent_processed',
-    )
-    
-    actions = (
-        'mark_unprocessed',
-    )
+    actions = ('mark_unprocessed',)
     
     def queryset(self, *args, **kwargs):
         qs = super(IndexFileAdmin, self).queryset(*args, **kwargs)
@@ -284,40 +241,34 @@ class IndexFileAdmin(admin.ModelAdmin):
             return ''
         return '%.02f%%' % (obj.processed_rows/float(obj.total_rows)*100,)
 
+
 admin.site.register(
     models.IndexFile,
     IndexFileAdmin)
     
+
 class IndexAdmin(admin.ModelAdmin):
-    list_display = (
-        'filename',
-        'company',
-        'cik',
-        '_ticker',
-        'form',
-        'date',
-        'quarter',
-        'attributes_loaded',
-        'valid',
-    )
+    list_display = ('filename',
+                    'company',
+                    'cik',
+                    '_ticker',
+                    'form',
+                    'date',
+                    'quarter',
+                    'attributes_loaded',
+                    'valid',)
+
+    search_fields = ('filename',
+                     'company__name',)
     
-    search_fields = (
-        'filename',
-        'company__name',
-    )
+    list_filter = ('attributes_loaded',
+                   'valid',
+                   'year',
+                   'quarter',
+                   'form',)
     
-    list_filter = (
-        'attributes_loaded',
-        'valid',
-        'year',
-        'quarter',
-        'form',
-    )
-    
-    readonly_fields = (
-        'cik',
-        'xbrl_link',
-    )
+    readonly_fields = ('cik',
+                       'xbrl_link',)
     
     actions = (
 #        'enable',
@@ -370,6 +321,7 @@ class IndexAdmin(admin.ModelAdmin):
             r.save()
     disable.short_description = 'Disable selected %(verbose_name_plural)s'
     
+
 admin.site.register(
     models.Index,
     IndexAdmin)
