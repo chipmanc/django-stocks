@@ -27,5 +27,5 @@ setup(
         'Framework :: Django',
     ],
     zip_safe = False,
-    install_requires = ['Django>=1.8.0', 'lxml'],
+    install_requires = ['Django>=1.8.0', 'lxml', 'mock', 'celery'],
 )

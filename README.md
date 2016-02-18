@@ -68,5 +68,7 @@ Future features
 
 * Celery integration to run concurrently across a cluster of servers
 * Refactor code to use better design pattern
-* Create tests
+* Create Tests
 * Start Documentation
+* Enable Logging
+* Modify management commands to update from Edgar via day, not month

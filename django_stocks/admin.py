@@ -13,9 +13,9 @@ import models
 
 
 class NamespaceAdmin(admin.ModelAdmin):
-    list_display = ('name')
+    list_display = ('name',)
     
-    search_fields = ('name')
+    search_fields = ('name',)
 
 
 admin.site.register(
@@ -27,13 +27,13 @@ class UnitAdmin(admin.ModelAdmin):
     form = forms.UnitChangeForm
     
     list_display = ('name',
-                    'master')
+                    'master',)
     
-    list_filter = ('master')
+    list_filter = ('master',)
     
-    readonly_fields = ('master')
+    readonly_fields = ('master',)
     
-    search_fields = ('name')
+    search_fields = ('name',)
 
 
 admin.site.register(
@@ -46,18 +46,18 @@ class AttributeAdmin(admin.ModelAdmin):
                     'namespace',
                     'load',
                     'total_values_fresh',
-                    'total_values')
+                    'total_values',)
     
     list_filter = ('load',
-                   'total_values_fresh')
+                   'total_values_fresh',)
     
-    search_fields = ('name')
+    search_fields = ('name',)
     
-    readonly_fields = ('total_values')
+    readonly_fields = ('total_values',)
     
     actions = ('enable_load',
                'disable_load',
-               'refresh_total_values')
+               'refresh_total_values',)
     
     def queryset(self, *args, **kwargs):
         qs = super(AttributeAdmin, self).queryset(*args, **kwargs)
@@ -93,20 +93,20 @@ class AttributeValueAdmin(admin.ModelAdmin):
                     'start_date',
                     'end_date',
                     'filing_date',
-                    'attribute_total_values')
+                    'attribute_total_values',)
     
     raw_id_fields = ('company',
-                     'attribute')
+                     'attribute',)
     
     search_fields = ('company__name',
-                     'attribute__name')
+                     'attribute__name',)
     
     readonly_fields = ('company_name',
                        'attribute_name',
                        'attribute_total_values',
-                       'true_unit')
+                       'true_unit',)
     
-    exclude = ('unit')
+    exclude = ('unit',)
     
     def queryset(self, *args, **kwargs):
         qs = super(AttributeValueAdmin, self).queryset(*args, **kwargs)
@@ -147,23 +147,23 @@ class CompanyAdmin(admin.ModelAdmin):
                     'name',
                     'min_date',
                     'max_date',
-                    'load')
+                    'load',)
     
-    list_filter = ('load')
+    list_filter = ('load',)
     
     search_fields = ('cik',
                      'name',
-                     '_ticker')
+                     '_ticker',)
     
     readonly_fields = ('cik',
                        'name',
                        'filings_link',
                        'values_link',
                        'min_date',
-                       'max_date')
+                       'max_date',)
     
     actions = ('enable_load',
-               'disable_load')
+               'disable_load',)
     
     def lookup_allowed(self, key, value):
         return True
@@ -218,11 +218,11 @@ class IndexFileAdmin(admin.ModelAdmin):
                     'processed_rows',
                     'percent_processed',
                     'downloaded',
-                    'processed')
+                    'processed',)
     
-    readonly_fields = ('percent_processed')
+    readonly_fields = ('percent_processed',)
     
-    actions = ('mark_unprocessed')
+    actions = ('mark_unprocessed',)
     
     def queryset(self, *args, **kwargs):
         qs = super(IndexFileAdmin, self).queryset(*args, **kwargs)
@@ -256,19 +256,19 @@ class IndexAdmin(admin.ModelAdmin):
                     'date',
                     'quarter',
                     'attributes_loaded',
-                    'valid')
+                    'valid',)
 
     search_fields = ('filename',
-                     'company__name')
+                     'company__name',)
     
     list_filter = ('attributes_loaded',
                    'valid',
                    'year',
                    'quarter',
-                   'form')
+                   'form',)
     
     readonly_fields = ('cik',
-                       'xbrl_link')
+                       'xbrl_link',)
     
     actions = (
 #        'enable',
