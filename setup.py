@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "django-stocks",
-    version = "0.4.4",
+    version = "0.5.1",
     packages = find_packages(),
     author = "Chris Chipman",
     author_email = "chipmanc@bellsouth.net",
