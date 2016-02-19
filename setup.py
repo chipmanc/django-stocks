@@ -1,18 +1,16 @@
 #!/usr/bin/env python
 from setuptools import setup, find_packages
 
-import django_stocks
-
 setup(
     name = "django-stocks",
-    version = django_stocks.__version__,
+    version = "0.5.1",
     packages = find_packages(),
     author = "Chris Chipman",
     author_email = "chipmanc@bellsouth.net",
     description = "Parse XBRL filings from the SEC's EDGAR in Python",
     license = "LGPL",
     url = "https://github.com/chipmanc/django-stocks",
-    keywords = ["django", "stocks", "SEC", "finance"],
+    keywords = ["django", "stocks", "SEC", "finance", "investment"],
     classifiers = [
         'License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)',
         'Development Status :: 4 - Beta',
@@ -24,9 +22,9 @@ setup(
         'Framework :: Django',
     ],
     zip_safe = False,
-<<<<<<< HEAD
-    install_requires = ['Django>=1.8.0', 'lxml', 'mock', 'celery'],
-=======
-    install_requires = ['django>=1.8.0', 'lxml', 'celery==3.1.18', 'MySQL-python==1.2.5'],
->>>>>>> develop
+    install_requires = ['Django>=1.8.0',
+                        'lxml',
+                        'mock',
+                        'celery==3.1.18',
+                        'MySQL-python==1.2.5'],
 )

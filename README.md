@@ -14,11 +14,31 @@ Installation
 
 Install the package using pip via:
 
-    pip install https://github.com/chipmanc/django-stocks
+    pip install django-stocks
 
-then add `django_stocks` to your `INSTALLED_APPS` and run:
+Django-stocks has several dependencies.  For lxml to be installed, you may need to install
+libxml2-devel, libxslt-devel, gcc on your system (CentOS).  For MySQL-python, mysql client
+will need to be installed.
 
+As this application uses celery to distribute tasks across multiple nodes, a broker will 
+need to be installed.  I suggest RabbitMQ, but others are available as well. You can read 
+more about celery and its requirements here:
+http://www.celeryproject.org
+
+You will need to add these lines to your settings.py:
+    BROKER_URL = amqp://host
+    CELERY_ACCEPT_CONTENT = ['json']
+    CELERY_TASK_SERIALIZER = 'json'
+    CELERY_RESULT_SERIALIZER = 'json'
+
+Also add `django_stocks` to your `INSTALLED_APPS` and run:
+    python manage.py makemigrations django_stocks
     python manage.py migrate django_stocks
+
+Finally, you will need to have celery running in order to accept tasks off the queue.
+Creating an init script is beyond the scope of this README, but you can use this command 
+for testing:
+    celery -A django_stocks worker -l INFO
 
 Usage
 -----
@@ -31,15 +51,6 @@ First, import filing indexes for a target year by running:
     
 This will essentially load the "card catalog" of all companies that filed
 documents between those years.
-
-If you're running this on the devserver, you can monitor import progress at:
-
-    http://localhost:8000/admin/django_stocks/indexfile/
-    
-and see the loaded indexes and companies at:
-
-    http://localhost:8000/admin/django_stocks/index/
-    http://localhost:8000/admin/django_stocks/company/
 
 Because the list of companies and filings is enormous, by default, all
 companies are configured to not download any actual filings
@@ -72,3 +83,4 @@ Future features
 * Start Documentation
 * Enable Logging
 * Modify management commands to update from Edgar via day, not month
+* Pep8ify
