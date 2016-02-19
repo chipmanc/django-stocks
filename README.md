@@ -6,7 +6,7 @@ into your local database. It provides an admin interface to allow you to
 control which indexes and attributes are loaded as well as inspect downloaded
 data.
 
-This is a fork of Chris Spencer's django-sec (https://github.com/chrisspen/django-sec),
+This is a fork of Chris Spencer's [django-sec](https://github.com/chrisspen/django-sec),
 which is originally a fork of Luke Rosiak's [PySEC](https://github.com/lukerosiak/pysec).
 
 Installation
@@ -16,9 +16,12 @@ Install the package using pip via:
 
     pip install django-stocks
 
-Django-stocks has several dependencies.  For lxml to be installed, you may need to install
-libxml2-devel, libxslt-devel, gcc on your system (CentOS).  For MySQL-python, mysql client
-will need to be installed.
+Django-stocks has several dependencies, you may be required to install:
+
+* libxml2-devel
+* libxslt-devel
+* gcc
+
 
 As this application uses celery to distribute tasks across multiple nodes, a broker will 
 need to be installed.  I suggest RabbitMQ, but others are available as well. You can read 
@@ -40,13 +43,13 @@ Also add `django_stocks` to your `INSTALLED_APPS` and run:
 Finally, you will need to have celery running in order to accept tasks off the queue.
 Creating an init script is beyond the scope of this README, but you can use this command 
 for testing:
+
     celery -A django_stocks worker -l INFO
 
 Usage
 -----
 
 The data import process is divided into two basic commands.
-
 First, import filing indexes for a target year by running:
 
     python manage.py sec_import_index --start-year=<year1> --end-year=<year2>
