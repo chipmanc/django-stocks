@@ -26,12 +26,14 @@ more about celery and its requirements here:
 http://www.celeryproject.org
 
 You will need to add these lines to your settings.py:
+
     BROKER_URL = amqp://host
     CELERY_ACCEPT_CONTENT = ['json']
     CELERY_TASK_SERIALIZER = 'json'
     CELERY_RESULT_SERIALIZER = 'json'
 
 Also add `django_stocks` to your `INSTALLED_APPS` and run:
+
     python manage.py makemigrations django_stocks
     python manage.py migrate django_stocks
 
