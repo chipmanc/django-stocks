@@ -1,6 +1,5 @@
 from datetime import date
 from lxml import etree
-from xbrl_fundamentals import FundamentantalAccountingConcepts
 import re
 
 import constants as c
@@ -32,9 +31,7 @@ class XBRL:
         self._context_end_dates = {}
 
     def loadYear(self):
-        currentEnd = self.getNode("//dei:DocumentPeriodEndDate").text
-        #self.GetCurrentPeriodAndContextInformation(currentEnd)
-        FundamentantalAccountingConcepts(self)
+        self.currentEnd = self.getNode("//dei:DocumentPeriodEndDate").text
             
     def getNodeList(self, xpath, root=None):
         if root is None:
