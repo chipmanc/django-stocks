@@ -226,6 +226,7 @@ class Company(models.Model):
     
     class Meta:
         verbose_name_plural = _('companies')
+        ordering = ('name',)
     
     def __unicode__(self):
         return self.name
