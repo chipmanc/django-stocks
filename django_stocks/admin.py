@@ -11,11 +11,7 @@ admin.site.register(models.Namespace)
 
 @admin.register(models.Unit)
 class UnitAdmin(admin.ModelAdmin):
-    list_display = ('name',
-                    'master',)
-
-    list_filter = ('master',)
-    readonly_fields = ('master',)
+    list_display = ('name',)
     search_fields = ('name',)
 
 
@@ -23,31 +19,18 @@ class UnitAdmin(admin.ModelAdmin):
 class AttributeAdmin(admin.ModelAdmin):
     list_display = ('name',
                     'namespace',
-                    'load',
                     'total_values',)
 
-    list_filter = ('load',)
     search_fields = ('name',)
     readonly_fields = ('total_values',)
-    actions = ('enable_load',
-               'disable_load',)
     
-    def enable_load(self, request, queryset):
-        models.Attribute.objects.filter(id__in=queryset).update(load=True)
-        models.Index.objects.filter(attributes_loaded=True).update(attributes_loaded=False)
-    enable_load.short_description = 'Enable value loading of selected %(verbose_name_plural)s'
-    
-    def disable_load(self, request, queryset):
-        models.Attribute.objects.filter(id__in=queryset).update(load=False)
-    disable_load.short_description = 'Disable value loading of selected %(verbose_name_plural)s'
-
 
 @admin.register(models.AttributeValue)
 class AttributeValueAdmin(admin.ModelAdmin):
     list_display = ('company',
                     'attribute_name',
                     'value',
-                    'true_unit',
+                    'unit',
                     'start_date',
                     'end_date',
                     'filing_date',
@@ -61,15 +44,9 @@ class AttributeValueAdmin(admin.ModelAdmin):
     readonly_fields = ('company',
                        'attribute',
                        'attribute_total_values',
-                       'true_unit',)
+                       'unit',)
     
     exclude = ('unit',)
-    
-    def true_unit(self, obj=None):
-        if not obj:
-            return ''
-        return obj.unit.true_unit
-    true_unit.short_description = 'unit'
     
     def company_name(self, obj=None):
         if not obj:
@@ -182,7 +159,7 @@ class IndexAdmin(admin.ModelAdmin):
     list_display = ('filename',
                     'company',
                     'cik',
-                    '_ticker',
+                    #'ticker',
                     'form',
                     'date',
                     'quarter',

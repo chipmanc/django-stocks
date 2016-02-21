@@ -40,36 +40,12 @@ class Unit(models.Model):
         db_index=True,
         unique=True)
     
-    true_unit = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        help_text=_('''Points to the unit record this record duplicates.
-            Points to itself if this is the master unit.'''))
-    
-    master = models.BooleanField(
-        default=True,
-        editable=False,
-        help_text=_('If true, indicates this unit is the master referred to by duplicates.'))
-    
     class Meta:
         ordering = ('name',)
     
     def __unicode__(self):
         return self.name
     
-    def save(self, *args, **kwargs):
-        if self.id:
-            self.true_unit = self.true_unit or self
-            self.master = self == self.true_unit
-        super(Unit, self).save(*args, **kwargs)
-    
-    @classmethod
-    def do_update(cls, *args, **kwargs):
-        q = cls.objects.filter(true_unit__isnull=True)
-        for r in q.iterator():
-            r.save()
 
 class Attribute(models.Model):
     """
@@ -83,11 +59,6 @@ class Attribute(models.Model):
         blank=False,
         null=False,
         db_index=True)
-    
-    load = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text=_('If checked, all values will be loaded for this attribute.'))
     
     total_values = models.PositiveIntegerField(
         blank=True,
@@ -223,6 +194,16 @@ class Company(models.Model):
         db_index=True,
         help_text=_('''The most recent date of associated SEC Edgar filings
             for this company.'''))
+
+    ticker = models.CharField(
+        max_length=50,
+        db_index=True,
+        db_column='ticker',
+        verbose_name=_('ticker'),
+        blank=True,
+        null=True,
+        help_text=_('''Caches the trading symbol if one is detected in the
+            filing during attribute load.'''))
     
     class Meta:
         verbose_name_plural = _('companies')
@@ -252,7 +233,6 @@ class Company(models.Model):
         super(Company, self).save(*args, **kwargs)
     
 class Index(models.Model):
-    
     company = models.ForeignKey(
         'Company',
         related_name='filings')
@@ -288,16 +268,6 @@ class Index(models.Model):
         null=False,
         db_index=True)
     
-    _ticker = models.CharField(
-        max_length=50,
-        db_index=True,
-        db_column='ticker',
-        verbose_name=_('ticker'),
-        blank=True,
-        null=True,
-        help_text=_('''Caches the trading symbol if one is detected in the
-            filing during attribute load.'''))
-    
     attributes_loaded = models.BooleanField(default=False, db_index=True)
     
     valid = models.BooleanField(
@@ -308,7 +278,7 @@ class Index(models.Model):
     error = models.TextField(blank=True, null=True)
     
     class Meta:
-        verbose_name_plural = _('indexes')
+        verbose_name_plural = _('indices')
         # Note, filenames are not necessarily unique.
         # Filenames may be listed more than once under a different
         # form type.
@@ -381,8 +351,6 @@ class Index(models.Model):
                     os.system('wget %s' % xbrl_link)
                 else:
                     os.system('wget --quiet %s' % xbrl_link)
-                # Don't to this. It wastes disk space. Just read the ZIP directly.
-                #os.system('unzip *.zip')
 
     def xbrl_localpath(self):
         try:
