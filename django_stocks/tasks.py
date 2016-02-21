@@ -1,16 +1,16 @@
 from __future__ import absolute_import
 
-from celery import shared_task
-import urllib
+from datetime import date, datetime
 import os
 import re
-import sys
 from StringIO import StringIO
+import sys
 import time
 import traceback
+import urllib
 from zipfile import ZipFile
-from datetime import date, datetime
 
+from celery import shared_task
 from django.db import DatabaseError
 from django.utils import timezone
 from django.utils.encoding import force_text
@@ -88,10 +88,13 @@ def get_filing_list(year, quarter, reprocess=False):
     print 'Opening index file %s.' % (fn,)
     zip = ZipFile(fn)
     zdata = zip.read('company.idx')
-    # zdata = removeNonAscii(zdata)
 
     # Parse the fixed-length fields
-    bulk_companies = []
+    # Looking up companies in the for loop will add companies that may not have been
+    # committed to the DB yet.  We need to delay this until we write, hence both
+    # unique_companies & bulk_companies
+    unique_companies = set()
+    bulk_companies = set()
     bulk_indexes = []
     bulk_commit_freq = 1000
     status_secs = 5
@@ -100,8 +103,7 @@ def get_filing_list(year, quarter, reprocess=False):
     total = len(lines)
     IndexFile.objects.filter(id=ifile.id).update(total_rows=total)
     last_status = None
-    prior_ciks = set(Company.objects.all().values_list('cik', flat=True))
-    print 'Found %i prior ciks.' % len(prior_ciks)
+    print 'Found %i prior ciks.' % len(unique_companies)
     index_add_count = 0
     company_add_count = 0
     for r in lines[10:]:  # Note, first 10 lines are useless headers.
@@ -113,37 +115,37 @@ def get_filing_list(year, quarter, reprocess=False):
             sys.stdout.flush()
             last_status = datetime.now()
             IndexFile.objects.filter(id=ifile.id).update(processed_rows=i)
+        if r.strip() == '':
+            continue
+        cik = int(r[74:86].strip())
         dt = r[86:98].strip()
+        filename = r[98:].strip()
+        form = r[62:74].strip()
+        name = r[0:62].strip()
+        if form == "UPLOAD":
+            continue
         if not dt:
             continue
         dt = date(*map(int, dt.split('-')))
-        if r.strip() == '':
-            continue
-        name = r[0:62].strip()
 
-        cik = int(r[74:86].strip())
-        try:
-            Company.objects.get(cik=cik)
-        except:
-            company_add_count += 1
-            prior_ciks.add(cik)
-            bulk_companies.append(Company(cik=cik, name=force_text(name, errors='replace')))
+        company_add_count += 1
+        unique_companies.add(Company(cik=cik, name=name))
 
-        filename = r[98:].strip()
-        if Index.objects.filter(company__cik=cik, date=dt, filename=filename).exists():
+        if Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename).exists():
             continue
         index_add_count += 1
-        bulk_indexes.append(Index(
-            company_id=cik,
-            form=r[62:74].strip(),  # form type
-            date=dt,
-            year=year,
-            quarter=quarter,
-            filename=filename,
-        ))
+        bulk_indexes.append(Index(company_id=cik, form=form, date=dt, year=year, quarter=quarter, filename=filename,))
+        
+    for company in unique_companies:
+        if Company.objects.filter(cik=company.cik).exists():
+            pass
+        else:
+            bulk.companies.add(company)
+    if bulk_companies: 
+        Company.objects.bulk_create(bulk_companies, batch_size=250)
+    if bulk_indexes:
+        Index.objects.bulk_create(bulk_indexes, batch_size=500)
 
-    Company.objects.bulk_create(bulk_companies, batch_size=1000)
-    Index.objects.bulk_create(bulk_indexes, batch_size=1000)
     IndexFile.objects.filter(id=ifile.id).update(processed=timezone.now())
 
     print '\rProcessing record %i of %i (%.02f%%).' % (total, total, 100),
@@ -251,7 +253,7 @@ def import_attrs(**kwargs):
                 ))
 
             if bulk_objects:
-                AttributeValue.objects.bulk_create(bulk_objects, batch_size=1000)
+                AttributeValue.objects.bulk_create(bulk_objects)
                 bulk_objects = []
 
             ticker = ifile.ticker()
