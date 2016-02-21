@@ -103,7 +103,7 @@ class Attribute(models.Model):
         index_together = (('namespace', 'name'),)
     
     def __unicode__(self):
-        return '{%s}%s' % (self.namespace, self.name)
+        return '%s' % (self.name)
     
     @classmethod
     def do_update(cls, *args, **kwargs):

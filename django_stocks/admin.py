@@ -44,7 +44,7 @@ class AttributeAdmin(admin.ModelAdmin):
 
 @admin.register(models.AttributeValue)
 class AttributeValueAdmin(admin.ModelAdmin):
-    list_display = ('company_name',
+    list_display = ('company',
                     'attribute_name',
                     'value',
                     'true_unit',
@@ -52,15 +52,14 @@ class AttributeValueAdmin(admin.ModelAdmin):
                     'end_date',
                     'filing_date',
                     'attribute_total_values',)
+
     list_filter = ('end_date',)
-    raw_id_fields = ('company',
-                     'attribute',)
-    
+
     search_fields = ('company__name',
                      'attribute__name',)
     
-    readonly_fields = ('company_name',
-                       'attribute_name',
+    readonly_fields = ('company',
+                       'attribute',
                        'attribute_total_values',
                        'true_unit',)
     
