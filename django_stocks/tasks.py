@@ -140,7 +140,7 @@ def get_filing_list(year, quarter, reprocess=False):
         if Company.objects.filter(cik=company.cik).exists():
             pass
         else:
-            bulk.companies.add(company)
+            bulk_companies.add(company)
     if bulk_companies: 
         Company.objects.bulk_create(bulk_companies, batch_size=250)
     if bulk_indexes:
