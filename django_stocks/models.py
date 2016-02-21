@@ -186,7 +186,7 @@ class IndexFile(models.Model):
     processed = models.DateTimeField(blank=True, null=True)
     
     class Meta:
-        ordering = ('year', 'quarter')
+        ordering = ('-year', 'quarter')
         unique_together = (('year', 'quarter'),)
 
 class Company(models.Model):

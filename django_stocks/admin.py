@@ -152,7 +152,9 @@ class IndexFileAdmin(admin.ModelAdmin):
                     'downloaded',
                     'processed',)
     
-    readonly_fields = ('percent_processed',)
+    readonly_fields = ('percent_processed',
+                       'total_rows',
+                       'processed_rows',)
     
     actions = ('mark_unprocessed',)
     
@@ -166,6 +168,13 @@ class IndexFileAdmin(admin.ModelAdmin):
         if not obj or not obj.total_rows or not obj.processed_rows:
             return ''
         return '%.02f%%' % (obj.processed_rows/float(obj.total_rows)*100,)
+
+    def get_readonly_fields(self, request, obj=None):
+        exclude = []
+        return [
+            _.name for _ in self.model._meta.fields
+            if _.name not in exclude
+        ] + list(self.readonly_fields)
 
 
 @admin.register(models.Index)
@@ -192,11 +201,6 @@ class IndexAdmin(admin.ModelAdmin):
     readonly_fields = ('cik',
                        'xbrl_link',)
     
-    actions = (
-#        'enable',
-#        'disable',
-    )
-    
     def cik(self, obj=None):
         if not obj:
             return ''
@@ -209,30 +213,3 @@ class IndexAdmin(admin.ModelAdmin):
             _.name for _ in self.model._meta.fields
             if _.name not in exclude
         ] + list(self.readonly_fields)
-    
-    def get_fieldsets(self, request, obj=None):
-        readonly_fields = list(self.readonly_fields)
-        exclude = readonly_fields + ['id']
-        first = ['filename']
-        fields = first + readonly_fields + [
-            _.name for _ in self.model._meta.fields
-            if _.name not in exclude and _.name not in first
-        ]
-        fieldsets = (
-            (None, {
-                'fields': fields,
-            }),
-        )
-        return fieldsets
-    
-    def enable(self, request, queryset):
-        for r in queryset.iterator():
-            r.enabled = True
-            r.save()
-    enable.short_description = 'Enable selected %(verbose_name_plural)s'
-    
-    def disable(self, request, queryset):
-        for r in queryset.iterator():
-            r.enabled = False
-            r.save()
-    disable.short_description = 'Disable selected %(verbose_name_plural)s'
