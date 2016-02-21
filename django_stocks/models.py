@@ -2,16 +2,10 @@ import os
 import sys
 import zipfile
 
+from django.conf import settings
 from django.db import models
 from django.db.models import Min, Max
-from django.conf import settings
 from django.utils.translation import ugettext, ugettext_lazy as _
-
-try:
-    from admin_steroids.utils import StringWithTitle
-    APP_LABEL = StringWithTitle('django_stocks', 'SEC')
-except ImportError:
-    APP_LABEL = 'django_stocks'
 
 from django_stocks import xbrl
 
@@ -30,8 +24,6 @@ class Namespace(models.Model):
         db_index=True,
         unique=True)
     
-    class Meta:
-        app_label = APP_LABEL
     
     def __unicode__(self):
         return self.name
@@ -53,7 +45,7 @@ class Unit(models.Model):
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
-        help_text=_('''Points the the unit record this record duplicates.
+        help_text=_('''Points to the unit record this record duplicates.
             Points to itself if this is the master unit.'''))
     
     master = models.BooleanField(
@@ -62,10 +54,7 @@ class Unit(models.Model):
         help_text=_('If true, indicates this unit is the master referred to by duplicates.'))
     
     class Meta:
-        app_label = APP_LABEL
-        ordering = (
-            'name',
-        )
+        ordering = ('name',)
     
     def __unicode__(self):
         return self.name
@@ -110,16 +99,11 @@ class Attribute(models.Model):
         verbose_name='fresh')
     
     class Meta:
-        app_label = APP_LABEL
-        unique_together = (
-            ('namespace', 'name'),
-        )
-        index_together = (
-            ('namespace', 'name'),
-        )
+        unique_together = (('namespace', 'name'),)
+        index_together = (('namespace', 'name'),)
     
     def __unicode__(self):
-        return '{%s}%s' % (self.namespace, self.name)
+        return '%s' % (self.name)
     
     @classmethod
     def do_update(cls, *args, **kwargs):
@@ -133,10 +117,10 @@ class Attribute(models.Model):
                 total_values=total_values,
                 total_values_fresh=True)
 
+
 class AttributeValue(models.Model):
     
     company = models.ForeignKey('Company', related_name='attributes')
-    
     attribute = models.ForeignKey('Attribute', related_name='values')
     
     # Inspecting several XBRL samples, no digits above 12 characters
@@ -170,14 +154,9 @@ class AttributeValue(models.Model):
         help_text=_('The date this information became publically available.'))
     
     class Meta:
-        app_label = APP_LABEL
         ordering = ('-attribute__total_values', '-start_date', 'attribute__name')
-        unique_together = (
-            ('company', 'attribute', 'start_date', 'end_date'),
-        )
-        index_together = (
-            ('company', 'attribute', 'start_date'),
-        )
+        unique_together = (('company', 'attribute', 'start_date', 'end_date'),)
+        index_together = (('company', 'attribute', 'start_date'),)
         
     def __unicode__(self):
         return '%s %s=%s %s on %s' % (
@@ -201,21 +180,14 @@ class IndexFile(models.Model):
         db_index=True)
     
     filename = models.CharField(max_length=200, blank=False, null=False)
-    
     total_rows = models.PositiveIntegerField(blank=True, null=True)
-    
     processed_rows = models.PositiveIntegerField(blank=True, null=True)
-    
     downloaded = models.DateTimeField(blank=True, null=True)
-    
     processed = models.DateTimeField(blank=True, null=True)
     
     class Meta:
-        app_label = APP_LABEL
-        ordering = ('year', 'quarter')
-        unique_together = (
-            ('year', 'quarter'),
-        )
+        ordering = ('-year', 'quarter')
+        unique_together = (('year', 'quarter'),)
 
 class Company(models.Model):
 
@@ -253,8 +225,8 @@ class Company(models.Model):
             for this company.'''))
     
     class Meta:
-        app_label = APP_LABEL
         verbose_name_plural = _('companies')
+        ordering = ('name',)
     
     def __unicode__(self):
         return self.name
@@ -336,14 +308,11 @@ class Index(models.Model):
     error = models.TextField(blank=True, null=True)
     
     class Meta:
-        app_label = APP_LABEL
         verbose_name_plural = _('indexes')
-        unique_together = (
-            # Note, filenames are not necessarily unique.
-            # Filenames may be listed more than once under a different
-            # form type.
-            ('company', 'form', 'date', 'filename', 'year', 'quarter'),
-        )
+        # Note, filenames are not necessarily unique.
+        # Filenames may be listed more than once under a different
+        # form type.
+        unique_together = (('company', 'form', 'date', 'filename', 'year', 'quarter'),)
         index_together = (('year', 'quarter'),
                           ('company', 'date', 'filename'),)
         ordering = ('-date', 'filename')
