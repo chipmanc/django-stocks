@@ -105,7 +105,6 @@ def get_filing_list(year, quarter, reprocess=False):
     last_status = None
     print 'Found %i prior ciks.' % len(unique_companies)
     index_add_count = 0
-    company_add_count = 0
     for r in lines[10:]:  # Note, first 10 lines are useless headers.
         i += 1
         if (not reprocess and ifile.processed_rows and i < ifile.processed_rows):
@@ -128,29 +127,40 @@ def get_filing_list(year, quarter, reprocess=False):
             continue
         dt = date(*map(int, dt.split('-')))
 
-        company_add_count += 1
         unique_companies.add(Company(cik=cik, name=name))
 
         if Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename).exists():
             continue
         index_add_count += 1
         bulk_indexes.append(Index(company_id=cik, form=form, date=dt, year=year, quarter=quarter, filename=filename,))
-        
-    for company in unique_companies:
-        if Company.objects.filter(cik=company.cik).exists():
-            pass
-        else:
-            bulk_companies.add(company)
-    if bulk_companies: 
-        Company.objects.bulk_create(bulk_companies, batch_size=250)
-    if bulk_indexes:
-        Index.objects.bulk_create(bulk_indexes, batch_size=500)
+    attempts = 1
+    while True: 
+        if attempts > 5:
+            raise Exception
+            break
+        try:
+            for company in unique_companies:
+                if Company.objects.filter(cik=company.cik).exists():
+                    pass
+                else:
+                    bulk_companies.add(company)
+            if bulk_companies: 
+                Company.objects.bulk_create(bulk_companies, batch_size=2500)
+            if bulk_indexes:
+                Index.objects.bulk_create(bulk_indexes, batch_size=2500)
+            break
+        except Exception as e:
+            bulk_companies.clear()
+            attempts += 1
+            print e
+            time.sleep(15)
+            continue
 
     IndexFile.objects.filter(id=ifile.id).update(processed=timezone.now())
 
     print '\rProcessing record %i of %i (%.02f%%).' % (total, total, 100),
     print
-    print '%i new companies found.' % company_add_count
+    print '%i new companies found.' % len(bulk_companies)
     print '%i new indexes found.' % index_add_count
     sys.stdout.flush()
     IndexFile.objects.filter(id=ifile.id).update(processed_rows=total)
