@@ -1,18 +1,6 @@
 import re
 import urllib2
-import time
 
-try:
-    from fake_useragent import UserAgent
-except ImportError:
-    UserAgent = None
-
-def get_user_agent():
-    if UserAgent:
-        ua = UserAgent()
-        return ua.random
-    else:
-        return 'Python-urllib/2.7/Django-SEC'
 
 def lookup_cik(ticker, name=None):
     """
@@ -25,7 +13,7 @@ def lookup_cik(ticker, name=None):
     url = 'http://www.sec.gov/cgi-bin/browse-edgar?CIK={cik}&owner=exclude&Find=Find+Companies&action=getcompany'.format(cik=ticker)
     #print 'url1:',url
     #response = urllib2.urlopen(url)
-    request = urllib2.Request(url=url, headers={'User-agent':get_user_agent()})
+    request = urllib2.Request(url=url)
     response = urllib2.urlopen(request)
     data = response.read()
     try:
@@ -48,7 +36,7 @@ def lookup_cik(ticker, name=None):
         for i in xrange(len(name_parts)):
             url = 'http://www.sec.gov/cgi-bin/cik.pl.c?company={company}'.format(company='+'.join(name_parts[:-(i+1)]))
 #            response = urllib2.urlopen(url)
-            request = urllib2.Request(url=url, headers={'User-agent':get_user_agent()})
+            request = urllib2.Request(url=url)
             response = urllib2.urlopen(request)
             data = response.read()
             matches = re.findall('CIK=([0-9]+)', data)
@@ -61,7 +49,7 @@ def lookup_cik(ticker, name=None):
     url = 'http://finance.yahoo.com/q/sec?s={symbol}+SEC+Filings'.format(symbol=ticker)
     #print 'url2:',url
 #    response = urllib2.urlopen(url)
-    request = urllib2.Request(url=url, headers={'User-agent':get_user_agent()})
+    request = urllib2.Request(url=url)
     response = urllib2.urlopen(request)
     data = response.read()
     try:
