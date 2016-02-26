@@ -123,35 +123,23 @@ class CompanyAdmin(admin.ModelAdmin):
 class IndexFileAdmin(admin.ModelAdmin):
     list_display = ('year',
                     'quarter',
-                    'total_rows',
-                    'processed_rows',
-                    'percent_processed',
                     'downloaded',
-                    'processed',)
-    
-    readonly_fields = ('percent_processed',
-                       'total_rows',
-                       'processed_rows',)
+                    'complete',)
     
     actions = ('mark_unprocessed',)
     
     def mark_unprocessed(self, request, queryset):
         models.IndexFile.objects\
             .filter(id__in=queryset.values_list('id', flat=True))\
-            .update(processed=None, processed_rows=0)
+            .update(complete=None, downloaded=None)
     mark_unprocessed.short_description = 'Mark selected %(verbose_name_plural)s as unprocessed'
     
-    def percent_processed(self, obj=None):
-        if not obj or not obj.total_rows or not obj.processed_rows:
-            return ''
-        return '%.02f%%' % (obj.processed_rows/float(obj.total_rows)*100,)
-
     def get_readonly_fields(self, request, obj=None):
         exclude = []
         return [
             _.name for _ in self.model._meta.fields
             if _.name not in exclude
-        ] + list(self.readonly_fields)
+        ]
 
 
 @admin.register(models.Index)
