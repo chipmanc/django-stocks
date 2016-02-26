@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 from datetime import date, datetime
+from functools import partial
 import os
 import re
 from StringIO import StringIO
@@ -42,128 +43,69 @@ def print_progress(message,
     sys.stdout.flush()
 
 
-
-@shared_task
+@shared_task(max_retries=5, default_retry_delay=20)
 def get_filing_list(year, quarter, reprocess=False):
     """
     Gets the list of filings and download locations for the given
     year and quarter.
     """
-    url = ('ftp://ftp.sec.gov/edgar/full-index/%d'
-           '/QTR%d/company.zip') % (year, quarter)
-    print url
+    edgar_host = 'ftp.sec.gov'
+    path = 'edgar/full-index/{0}/QTR{1}/company.zip'.format(year, quarter)
+    url = edgar_host + path
+    ifile, _ = IndexFile.objects.get_or_create(
+        year=year, quarter=quarter, defaults=dict(filename=path))
+    if ifile.complete and not reprocess:
+        return
+    ifile.downloaded = timezone.now()
+    ifile.save()
 
-    # Download the data and save to a file
+    unique_companies = set()
+    bulk_companies = set()
+    bulk_indexes = []
+    attempts  = 1
+
     if not os.path.isdir(DATA_DIR):
         os.makedirs(DATA_DIR)
     fn = os.path.join(DATA_DIR, 'company_%d_%d.zip' % (year, quarter))
-
-    ifile, _ = IndexFile.objects.get_or_create(
-        year=year, quarter=quarter, defaults=dict(filename=fn))
-    if ifile.processed and not reprocess:
-        return
-    ifile.filename = fn
-
     if os.path.exists(fn) and reprocess:
-        print 'Deleting old file %s.' % fn
         os.remove(fn)
-
     if not os.path.exists(fn):
-        print 'Downloading %s.' % (url,)
         try:
             compressed_data = urllib.urlopen(url).read()
         except IOError, e:
-            print 'Unable to download url: %s' % (e,)
             return
         fileout = file(fn, 'w')
         fileout.write(compressed_data)
         fileout.close()
-        ifile.downloaded = timezone.now()
 
-    if not ifile.downloaded:
-        ifile.downloaded = timezone.now()
-    ifile.save()
-
-    # Extract the compressed file
-    print 'Opening index file %s.' % (fn,)
     zip = ZipFile(fn)
     zdata = zip.read('company.idx')
-
-    # Parse the fixed-length fields
-    # Looking up companies in the for loop will add companies that may not have been
-    # committed to the DB yet.  We need to delay this until we write, hence both
-    # unique_companies & bulk_companies
-    unique_companies = set()
-    bulk_companies = set()
-    bulk_indexes = []
-    bulk_commit_freq = 1000
-    status_secs = 5
     lines = zdata.split('\n')
-    i = 0
-    total = len(lines)
-    IndexFile.objects.filter(id=ifile.id).update(total_rows=total)
-    last_status = None
-    print 'Found %i prior ciks.' % len(unique_companies)
-    index_add_count = 0
-    for r in lines[10:]:  # Note, first 10 lines are useless headers.
-        i += 1
-        if (not reprocess and ifile.processed_rows and i < ifile.processed_rows):
+
+    for form_line in lines[10:]:
+        if form_line.strip() == '':
             continue
-        if (not last_status or ((datetime.now() - last_status).seconds >= status_secs)):
-            print ('\rProcessing record ' '%i of %i (%.02f%%).') % (i, total, float(i)/total*100)
-            sys.stdout.flush()
-            last_status = datetime.now()
-            IndexFile.objects.filter(id=ifile.id).update(processed_rows=i)
-        if r.strip() == '':
-            continue
-        cik = int(r[74:86].strip())
-        dt = r[86:98].strip()
-        filename = r[98:].strip()
-        form = r[62:74].strip()
-        name = r[0:62].strip()
-        if form == "UPLOAD":
-            continue
-        if not dt:
-            continue
+        cik = int(form_line[74:86].strip())
+        filename = form_line[98:].strip()
+        form = form_line[62:74].strip()
+        name = form_line[0:62].strip()
+        dt = form_line[86:98].strip()
         dt = date(*map(int, dt.split('-')))
 
-        unique_companies.add(Company(cik=cik, name=name))
+        if form in ['10-K', '10-Q', '20-F', '10-K/A', '10-Q/A', '20-F/A']:
+            if not Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename).exists():
+                unique_companies.add(Company(cik=cik, name=name))
+                bulk_indexes.append(Index(company_id=cik, form=form, date=dt, year=year, quarter=quarter, filename=filename,))
 
-        if Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename).exists():
-            continue
-        index_add_count += 1
-        bulk_indexes.append(Index(company_id=cik, form=form, date=dt, year=year, quarter=quarter, filename=filename,))
-    attempts = 1
-    while True: 
-        if attempts > 5:
-            raise Exception
-            break
+    bulk_companies = {company for company in unique_companies
+                     if not Company.objects.filter(cik=company.cik).exists()}
+    if bulk_companies:
         try:
-            for company in unique_companies:
-                if Company.objects.filter(cik=company.cik).exists():
-                    pass
-                else:
-                    bulk_companies.add(company)
-            if bulk_companies: 
-                Company.objects.bulk_create(bulk_companies, batch_size=2500)
-            if bulk_indexes:
-                Index.objects.bulk_create(bulk_indexes, batch_size=2500)
-            break
-        except Exception as e:
-            bulk_companies.clear()
-            attempts += 1
-            print e
-            time.sleep(15)
-            continue
-
-    IndexFile.objects.filter(id=ifile.id).update(processed=timezone.now())
-
-    print '\rProcessing record %i of %i (%.02f%%).' % (total, total, 100),
-    print
-    print '%i new companies found.' % len(bulk_companies)
-    print '%i new indexes found.' % index_add_count
-    sys.stdout.flush()
-    IndexFile.objects.filter(id=ifile.id).update(processed_rows=total)
+            Company.objects.bulk_create(bulk_companies, batch_size=1000)
+        except:
+            get_filing_list.retry()
+    Index.objects.bulk_create(bulk_indexes, batch_size=2500)
+    IndexFile.objects.filter(id=ifile.id).update(complete=timezone.now())
 
 
 @shared_task

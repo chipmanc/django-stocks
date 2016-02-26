@@ -151,10 +151,8 @@ class IndexFile(models.Model):
         db_index=True)
     
     filename = models.CharField(max_length=200, blank=False, null=False)
-    total_rows = models.PositiveIntegerField(blank=True, null=True)
-    processed_rows = models.PositiveIntegerField(blank=True, null=True)
     downloaded = models.DateTimeField(blank=True, null=True)
-    processed = models.DateTimeField(blank=True, null=True)
+    complete = models.DateTimeField(blank=True, null=True)
     
     class Meta:
         ordering = ('-year', 'quarter')
@@ -212,25 +210,25 @@ class Company(models.Model):
     def __unicode__(self):
         return self.name
     
-    def save(self, *args, **kwargs):
-        if self.cik:
-            try:
-                old = type(self).objects.get(cik=self.cik)
-                
-                aggs = self.attributes.all()\
-                    .aggregate(Min('start_date'), Max('start_date'))
-                self.min_date = aggs['start_date__min']
-                self.max_date = aggs['start_date__max']
-                
-                if not old.load and self.load:
-                    # If we just flag this company for loading then
-                    # flag this company's indexes for loading.
-                    Index.objects.filter(
-                        company=self, attributes_loaded=True
-                    ).update(attributes_loaded=False)
-            except type(self).DoesNotExist:
-                pass
-        super(Company, self).save(*args, **kwargs)
+#    def save(self, *args, **kwargs):
+#        if self.cik:
+#            try:
+#                old = type(self).objects.get(cik=self.cik)
+#                
+#                aggs = self.attributes.all()\
+#                    .aggregate(Min('start_date'), Max('start_date'))
+#                self.min_date = aggs['start_date__min']
+#                self.max_date = aggs['start_date__max']
+#                
+#                if not old.load and self.load:
+#                    # If we just flag this company for loading then
+#                    # flag this company's indexes for loading.
+#                    Index.objects.filter(
+#                        company=self, attributes_loaded=True
+#                    ).update(attributes_loaded=False)
+#            except type(self).DoesNotExist:
+#                pass
+#        super(Company, self).save(*args, **kwargs)
     
 class Index(models.Model):
     company = models.ForeignKey(
