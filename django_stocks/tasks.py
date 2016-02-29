@@ -49,8 +49,8 @@ def get_filing_list(year, quarter, reprocess=False):
     Gets the list of filings and download locations for the given
     year and quarter.
     """
-    edgar_host = 'ftp.sec.gov'
-    path = 'edgar/full-index/{0}/QTR{1}/company.zip'.format(year, quarter)
+    edgar_host = 'ftp://ftp.sec.gov'
+    path = '/edgar/full-index/{0}/QTR{1}/company.zip'.format(year, quarter)
     url = edgar_host + path
     ifile, _ = IndexFile.objects.get_or_create(
         year=year, quarter=quarter, defaults=dict(filename=path))
@@ -62,7 +62,6 @@ def get_filing_list(year, quarter, reprocess=False):
     unique_companies = set()
     bulk_companies = set()
     bulk_indexes = []
-    attempts  = 1
 
     if not os.path.isdir(DATA_DIR):
         os.makedirs(DATA_DIR)
@@ -72,8 +71,8 @@ def get_filing_list(year, quarter, reprocess=False):
     if not os.path.exists(fn):
         try:
             compressed_data = urllib.urlopen(url).read()
-        except IOError, e:
-            return
+        except IOError as e:
+            get_filing_list.retry()
         fileout = file(fn, 'w')
         fileout.write(compressed_data)
         fileout.close()
