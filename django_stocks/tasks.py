@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from datetime import date, datetime
-from functools import partial
+import logging
 import os
 import re
 from StringIO import StringIO
@@ -19,28 +19,7 @@ from django.utils.encoding import force_text
 from django_stocks.constants import MAX_QUANTIZE
 from django_stocks.models import Attribute, AttributeValue, Company, Index, IndexFile, Namespace, Unit, DATA_DIR
 
-
-def print_progress(message,
-                   current_count=0, total_count=0,
-                   sub_current=0, sub_total=0):
-    bar_length = 10
-    if total_count:
-        percent = current_count / float(total_count)
-        bar = ('=' * int(percent * bar_length)).ljust(bar_length)
-        percent = int(percent * 100)
-    else:
-        sys.stdout.write(message)
-        sys.stdout.flush()
-        return
-
-    if sub_current and sub_total:
-        sub_status = '(subtask %s of %s) ' % (sub_current, sub_total)
-    else:
-        sub_status = ''
-
-    sys.stdout.write("[%s] %s of %s %s%s%%  %s\n"
-                     % (bar, current_count, total_count, sub_status, percent, message))
-    sys.stdout.flush()
+logger = logging.getLogger(__name__)
 
 
 @shared_task(max_retries=5, default_retry_delay=20)
@@ -55,6 +34,7 @@ def get_filing_list(year, quarter, reprocess=False):
     ifile, _ = IndexFile.objects.get_or_create(
         year=year, quarter=quarter, defaults=dict(filename=path))
     if ifile.complete and not reprocess:
+        logger.info('Index file {0} already loaded'.format(ifile.filename))
         return
     ifile.downloaded = timezone.now()
     ifile.save()
@@ -72,6 +52,7 @@ def get_filing_list(year, quarter, reprocess=False):
         try:
             compressed_data = urllib.urlopen(url).read()
         except IOError as e:
+            logger.warning('Could not download {0}'.format(ifile.filename))
             get_filing_list.retry()
         fileout = file(fn, 'w')
         fileout.write(compressed_data)
@@ -101,26 +82,22 @@ def get_filing_list(year, quarter, reprocess=False):
     if bulk_companies:
         try:
             Company.objects.bulk_create(bulk_companies, batch_size=1000)
-        except:
+        except Exception as e:
+            logger.warning(e)
             get_filing_list.retry()
-    Index.objects.bulk_create(bulk_indexes, batch_size=2500)
+    try:
+        Index.objects.bulk_create(bulk_indexes, batch_size=2500)
+    except Exception as e:
+        logger.warning(e)
+        get_filing_list.retry()
     IndexFile.objects.filter(id=ifile.id).update(complete=timezone.now())
+    time_to_complete = ifile.complete - ifile.downloaded
+    logger.info('Added {0} in {0} seconds'.format(ifile.name, time_to_complete)
 
 
 @shared_task
 def import_attrs(**kwargs):
     ifile = Index.objects.get(filename=kwargs['filename'])
-    total_count = kwargs['total_count']
-    sub_current = 0
-    sub_total = 0
-    current_count = 0
-    commit_freq = 300
-
-    current_count += 1
-
-    msg = 'Processing index %s.' % (ifile.filename,)
-    print_progress(msg, current_count, total_count)
-
     ifile.download(verbose=kwargs['verbose'])
 
     x = None
@@ -131,7 +108,6 @@ def import_attrs(**kwargs):
         ferr = StringIO()
         traceback.print_exc(file=ferr)
         error = ferr.getvalue()
-        print error
         Index.objects.filter(id=ifile.id).update(valid=False, error=error)
 
     if x is None:
@@ -143,16 +119,7 @@ def import_attrs(**kwargs):
         try:
             company = ifile.company
             bulk_objects = []
-            sub_current = 0
             for node, sub_total in x.iter_namespace():
-                sub_current += 1
-                if not sub_current % commit_freq:
-                    print_progress(msg,
-                                        current_count,
-                                        total_count,
-                                        sub_current,
-                                        sub_total)
-
                 matches = re.findall('^\{([^\}]+)\}(.*)$', node.tag)
                 if matches:
                     ns, attr_name = matches[0]
@@ -178,7 +145,7 @@ def import_attrs(**kwargs):
                     continue
                 namespace, _ = Namespace.objects.get_or_create(name=ns.strip())
                 attribute, _ = Attribute.objects.get_or_create(namespace=namespace,
-                                                                      name=attr_name,)
+                                                               name=attr_name,)
                 unit, _ = Unit.objects.get_or_create(name=node.attrib['unitRef'].strip())
                 value = (node.text or '').strip()
                 if not value:
@@ -212,4 +179,3 @@ def import_attrs(**kwargs):
 
         except DatabaseError, e:
             print e
-    print_progress('Importing attributes.', current_count, total_count)
