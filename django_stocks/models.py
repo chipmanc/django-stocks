@@ -2,16 +2,10 @@ import os
 import sys
 import zipfile
 
+from django.conf import settings
 from django.db import models
 from django.db.models import Min, Max
-from django.conf import settings
 from django.utils.translation import ugettext, ugettext_lazy as _
-
-try:
-    from admin_steroids.utils import StringWithTitle
-    APP_LABEL = StringWithTitle('django_stocks', 'SEC')
-except ImportError:
-    APP_LABEL = 'django_stocks'
 
 from django_stocks import xbrl
 
@@ -30,8 +24,6 @@ class Namespace(models.Model):
         db_index=True,
         unique=True)
     
-    class Meta:
-        app_label = APP_LABEL
     
     def __unicode__(self):
         return self.name
@@ -48,39 +40,12 @@ class Unit(models.Model):
         db_index=True,
         unique=True)
     
-    true_unit = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        help_text=_('''Points the the unit record this record duplicates.
-            Points to itself if this is the master unit.'''))
-    
-    master = models.BooleanField(
-        default=True,
-        editable=False,
-        help_text=_('If true, indicates this unit is the master referred to by duplicates.'))
-    
     class Meta:
-        app_label = APP_LABEL
-        ordering = (
-            'name',
-        )
+        ordering = ('name',)
     
     def __unicode__(self):
         return self.name
     
-    def save(self, *args, **kwargs):
-        if self.id:
-            self.true_unit = self.true_unit or self
-            self.master = self == self.true_unit
-        super(Unit, self).save(*args, **kwargs)
-    
-    @classmethod
-    def do_update(cls, *args, **kwargs):
-        q = cls.objects.filter(true_unit__isnull=True)
-        for r in q.iterator():
-            r.save()
 
 class Attribute(models.Model):
     """
@@ -95,11 +60,6 @@ class Attribute(models.Model):
         null=False,
         db_index=True)
     
-    load = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text=_('If checked, all values will be loaded for this attribute.'))
-    
     total_values = models.PositiveIntegerField(
         blank=True,
         null=True,
@@ -110,16 +70,11 @@ class Attribute(models.Model):
         verbose_name='fresh')
     
     class Meta:
-        app_label = APP_LABEL
-        unique_together = (
-            ('namespace', 'name'),
-        )
-        index_together = (
-            ('namespace', 'name'),
-        )
+        unique_together = (('namespace', 'name'),)
+        index_together = (('namespace', 'name'),)
     
     def __unicode__(self):
-        return '{%s}%s' % (self.namespace, self.name)
+        return '%s' % (self.name)
     
     @classmethod
     def do_update(cls, *args, **kwargs):
@@ -133,10 +88,10 @@ class Attribute(models.Model):
                 total_values=total_values,
                 total_values_fresh=True)
 
+
 class AttributeValue(models.Model):
     
     company = models.ForeignKey('Company', related_name='attributes')
-    
     attribute = models.ForeignKey('Attribute', related_name='values')
     
     # Inspecting several XBRL samples, no digits above 12 characters
@@ -170,14 +125,9 @@ class AttributeValue(models.Model):
         help_text=_('The date this information became publically available.'))
     
     class Meta:
-        app_label = APP_LABEL
         ordering = ('-attribute__total_values', '-start_date', 'attribute__name')
-        unique_together = (
-            ('company', 'attribute', 'start_date', 'end_date'),
-        )
-        index_together = (
-            ('company', 'attribute', 'start_date'),
-        )
+        unique_together = (('company', 'attribute', 'start_date', 'end_date'),)
+        index_together = (('company', 'attribute', 'start_date'),)
         
     def __unicode__(self):
         return '%s %s=%s %s on %s' % (
@@ -201,21 +151,12 @@ class IndexFile(models.Model):
         db_index=True)
     
     filename = models.CharField(max_length=200, blank=False, null=False)
-    
-    total_rows = models.PositiveIntegerField(blank=True, null=True)
-    
-    processed_rows = models.PositiveIntegerField(blank=True, null=True)
-    
     downloaded = models.DateTimeField(blank=True, null=True)
-    
-    processed = models.DateTimeField(blank=True, null=True)
+    complete = models.DateTimeField(blank=True, null=True)
     
     class Meta:
-        app_label = APP_LABEL
-        ordering = ('year', 'quarter')
-        unique_together = (
-            ('year', 'quarter'),
-        )
+        ordering = ('-year', 'quarter')
+        unique_together = (('year', 'quarter'),)
 
 class Company(models.Model):
 
@@ -251,36 +192,45 @@ class Company(models.Model):
         db_index=True,
         help_text=_('''The most recent date of associated SEC Edgar filings
             for this company.'''))
+
+    ticker = models.CharField(
+        max_length=50,
+        db_index=True,
+        db_column='ticker',
+        verbose_name=_('ticker'),
+        blank=True,
+        null=True,
+        help_text=_('''Caches the trading symbol if one is detected in the
+            filing during attribute load.'''))
     
     class Meta:
-        app_label = APP_LABEL
         verbose_name_plural = _('companies')
+        ordering = ('name',)
     
     def __unicode__(self):
         return self.name
     
-    def save(self, *args, **kwargs):
-        if self.cik:
-            try:
-                old = type(self).objects.get(cik=self.cik)
-                
-                aggs = self.attributes.all()\
-                    .aggregate(Min('start_date'), Max('start_date'))
-                self.min_date = aggs['start_date__min']
-                self.max_date = aggs['start_date__max']
-                
-                if not old.load and self.load:
-                    # If we just flag this company for loading then
-                    # flag this company's indexes for loading.
-                    Index.objects.filter(
-                        company=self, attributes_loaded=True
-                    ).update(attributes_loaded=False)
-            except type(self).DoesNotExist:
-                pass
-        super(Company, self).save(*args, **kwargs)
+#    def save(self, *args, **kwargs):
+#        if self.cik:
+#            try:
+#                old = type(self).objects.get(cik=self.cik)
+#                
+#                aggs = self.attributes.all()\
+#                    .aggregate(Min('start_date'), Max('start_date'))
+#                self.min_date = aggs['start_date__min']
+#                self.max_date = aggs['start_date__max']
+#                
+#                if not old.load and self.load:
+#                    # If we just flag this company for loading then
+#                    # flag this company's indexes for loading.
+#                    Index.objects.filter(
+#                        company=self, attributes_loaded=True
+#                    ).update(attributes_loaded=False)
+#            except type(self).DoesNotExist:
+#                pass
+#        super(Company, self).save(*args, **kwargs)
     
 class Index(models.Model):
-    
     company = models.ForeignKey(
         'Company',
         related_name='filings')
@@ -316,16 +266,6 @@ class Index(models.Model):
         null=False,
         db_index=True)
     
-    _ticker = models.CharField(
-        max_length=50,
-        db_index=True,
-        db_column='ticker',
-        verbose_name=_('ticker'),
-        blank=True,
-        null=True,
-        help_text=_('''Caches the trading symbol if one is detected in the
-            filing during attribute load.'''))
-    
     attributes_loaded = models.BooleanField(default=False, db_index=True)
     
     valid = models.BooleanField(
@@ -336,14 +276,11 @@ class Index(models.Model):
     error = models.TextField(blank=True, null=True)
     
     class Meta:
-        app_label = APP_LABEL
-        verbose_name_plural = _('indexes')
-        unique_together = (
-            # Note, filenames are not necessarily unique.
-            # Filenames may be listed more than once under a different
-            # form type.
-            ('company', 'form', 'date', 'filename', 'year', 'quarter'),
-        )
+        verbose_name_plural = _('indices')
+        # Note, filenames are not necessarily unique.
+        # Filenames may be listed more than once under a different
+        # form type.
+        unique_together = (('company', 'form', 'date', 'filename', 'year', 'quarter'),)
         index_together = (('year', 'quarter'),
                           ('company', 'date', 'filename'),)
         ordering = ('-date', 'filename')
@@ -373,8 +310,8 @@ class Index(models.Model):
     def localpath(self):
         return '%s/%s/%s/' % (DATA_DIR, self.company.cik, self.txt()[:-4])
 
-    def localcik(self):
-        return '%s/%s/' % (DATA_DIR, self.company.cik)
+    #def localcik(self):
+    #    return '%s/%s/' % (DATA_DIR, self.company.cik)
     
     def html(self):
         filename = self.localfile()
@@ -390,9 +327,9 @@ class Index(models.Model):
 
     def download(self, verbose=False):
         
-        d = self.localcik()
-        if not os.path.isdir(d):
-            os.makedirs(d)
+        #d = self.localcik()
+        #if not os.path.isdir(d):
+        #    os.makedirs(d)
             
         d = self.localpath()
         if not os.path.isdir(d):
@@ -412,8 +349,6 @@ class Index(models.Model):
                     os.system('wget %s' % xbrl_link)
                 else:
                     os.system('wget --quiet %s' % xbrl_link)
-                # Don't to this. It wastes disk space. Just read the ZIP directly.
-                #os.system('unzip *.zip')
 
     def xbrl_localpath(self):
         try:
@@ -436,10 +371,10 @@ class Index(models.Model):
             print 'no xbrl found. this option is for 10-ks.'
             return
         x = xbrl.XBRL(filepath, opener=open_method)
-        x.fields['FiscalPeriod'] = x.fields['DocumentFiscalPeriodFocus']
-        x.fields['FiscalYear'] = x.fields['DocumentFiscalYearFocus']
-        x.fields['SECFilingPage'] = self.index_link()
-        x.fields['LinkToXBRLInstance'] = self.xbrl_link() 
+        #x.fields['FiscalPeriod'] = x.fields['DocumentFiscalPeriodFocus']
+        #x.fields['FiscalYear'] = x.fields['DocumentFiscalYearFocus']
+        #x.fields['SECFilingPage'] = self.index_link()
+        #x.fields['LinkToXBRLInstance'] = self.xbrl_link() 
         return x
         
     def ticker(self):

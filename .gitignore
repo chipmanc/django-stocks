@@ -32,5 +32,3 @@ lib64
 /.project
 /.pydevproject
 /.settings
-
-django_stocks/migrations
