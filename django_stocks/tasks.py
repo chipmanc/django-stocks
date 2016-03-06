@@ -112,17 +112,6 @@ def get_filing_list(year, quarter, reprocess=False):
 @shared_task
 def import_attrs(**kwargs):
     ifile = Index.objects.get(filename=kwargs['filename'])
-    total_count = kwargs['total_count']
-    sub_current = 0
-    sub_total = 0
-    current_count = 0
-    commit_freq = 300
-
-    current_count += 1
-
-    msg = 'Processing index %s.' % (ifile.filename,)
-    print_progress(msg, current_count, total_count)
-
     ifile.download(verbose=kwargs['verbose'])
     x = None
     error = None
