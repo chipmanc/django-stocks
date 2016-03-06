@@ -152,10 +152,7 @@ def import_attrs(**kwargs):
 
                 namespace, _ = Namespace.objects.get_or_create(name=ns.strip())
                 attribute, _ = Attribute.objects.get_or_create(namespace=namespace,
-                                                                      name=attr_name,
-                                                                      defaults=dict(load=True))
-                if not attribute.load:
-                    continue
+                                                                      name=attr_name)
                 unit, _ = Unit.objects.get_or_create(name=node.attrib['unitRef'].strip())
                 value = (node.text or '').strip()
                 if not value:
@@ -167,7 +164,7 @@ def import_attrs(**kwargs):
                 Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
                 if AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date, end_date=end_date).exists():
                     continue
-                bulk_objects.add(AttributeValue(
+                bulk_objects.append(AttributeValue(
                     company=company,
                     attribute=attribute,
                     start_date=start_date,
