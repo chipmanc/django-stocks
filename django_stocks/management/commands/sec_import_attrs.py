@@ -16,7 +16,7 @@ from django_stocks.tasks import import_attrs
 
 class Command(BaseCommand):
     def add_arguments(self, parser):
-        parser.add_argument('--cik',
+        parser.add_argument('--quarter',
                             type=int,
                             default=None)
         parser.add_argument('--forms',
@@ -27,7 +27,8 @@ class Command(BaseCommand):
         parser.add_argument('--end-year',
                             default=datetime.now().year,
                             type=int)
-        parser.add_argument('--quarter',
+        parser.add_argument('--cik',
+                            type=int,
                             default=None)
         parser.add_argument('--dryrun',
                             action='store_true',
@@ -41,9 +42,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         options['forms'] = options['forms'].split(',')
-
-        sub_current = 0
-        sub_total = 0
 
         try:
             # Get a file from the index.
@@ -60,6 +58,8 @@ class Command(BaseCommand):
                     valid__exact=1,)
             if options['forms']:
                 q = q.filter(form__in=options['forms'])
+            if options['quarter']:
+                q = q.filter(quarter__exact=options['quarter'])
             if options['cik']:
                 q = q.filter(company__cik=options['cik'])
             if not options['force']:
@@ -74,11 +74,10 @@ class Command(BaseCommand):
             kwargs = options.copy()
             for ifile in q.iterator():
                 kwargs['filename'] = ifile.filename
-                kwargs['total_count'] = total_count
                 import_attrs.delay(**kwargs)
 
         except Exception, e:
             ferr = StringIO()
             traceback.print_exc(file=ferr)
             error = ferr.getvalue()
-            self.print_progress('Fatal error: %s' % (error,))
+            print 'Fatal error: %s' % (error,)

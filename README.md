@@ -32,7 +32,6 @@ You will need to add these lines to your settings.py:
     CELERY_RESULT_SERIALIZER = 'json'
 
 Also add `django_stocks` to your `INSTALLED_APPS` and run:
-    python manage.py makemigrations django_stocks
     python manage.py migrate django_stocks
 
 Finally, you will need to have celery running in order to accept tasks off the queue.

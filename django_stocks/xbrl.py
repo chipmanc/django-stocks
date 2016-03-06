@@ -25,13 +25,13 @@ class XBRL:
         self.ns['xbrli'] = 'http://www.xbrl.org/2003/instance'
         self.ns['xlmns'] = 'http://www.xbrl.org/2003/instance'
         self.GetBaseInformation()
-        self.loadYear()
+        #self.loadYear()
         
         self._context_start_dates = {}
         self._context_end_dates = {}
 
-    def loadYear(self):
-        self.currentEnd = self.getNode("//dei:DocumentPeriodEndDate").text
+    #def loadYear(self):
+    #    self.currentEnd = self.getNode("//dei:DocumentPeriodEndDate").text
             
     def getNodeList(self, xpath, root=None):
         if root is None:
@@ -51,9 +51,8 @@ class XBRL:
         """
         SeekConcept = '%s:*' % (ns,)
         node_list = self.getNodeList("//" + SeekConcept)
-        total = len(node_list)
         for node in node_list:
-            yield node, total
+            yield node
 
     def GetFactValue(self, SeekConcept, ConceptPeriodType):
                 
@@ -87,71 +86,9 @@ class XBRL:
         return factValue
 
     def GetBaseInformation(self):
-                
-        #Registered Name
-        oNode = self.getNode("//dei:EntityRegistrantName[@contextRef]")
-        if oNode is not None:
-            self.fields['EntityRegistrantName'] = oNode.text
-        else:
-            self.fields['EntityRegistrantName'] = "Registered name not found"
-
-        #Fiscal year
-        oNode = self.getNode("//dei:CurrentFiscalYearEndDate[@contextRef]")
-        if oNode is not None:
-            self.fields['FiscalYear'] = oNode.text
-        else:
-            self.fields['FiscalYear'] = "Fiscal year not found"
-
-        #EntityCentralIndexKey
-        oNode = self.getNode("//dei:EntityCentralIndexKey[@contextRef]")
-        if oNode is not None:
-            self.fields['EntityCentralIndexKey'] = oNode.text
-        else:
-            self.fields['EntityCentralIndexKey'] = "CIK not found"
-
-        #EntityFilerCategory
-        oNode = self.getNode("//dei:EntityFilerCategory[@contextRef]")
-        if oNode is not None:
-            self.fields['EntityFilerCategory'] = oNode.text
-        else:
-            self.fields['EntityFilerCategory'] = "Filer category not found"
-
-        #TradingSymbol
-        oNode = self.getNode("//dei:TradingSymbol[@contextRef]")
-        if oNode is not None:
-            self.fields['TradingSymbol'] = oNode.text
-        else:
-            self.fields['TradingSymbol'] = None
-
-        #DocumentFiscalYearFocus
-        oNode = self.getNode("//dei:DocumentFiscalYearFocus[@contextRef]")
-        if oNode is not None:
-            self.fields['DocumentFiscalYearFocus'] = oNode.text
-        else:
-            self.fields['DocumentFiscalYearFocus'] = "Fiscal year focus not found"
-
-        #DocumentFiscalPeriodFocus
-        oNode = self.getNode("//dei:DocumentFiscalPeriodFocus[@contextRef]")
-        if oNode is not None:
-            self.fields['DocumentFiscalPeriodFocus'] = oNode.text
-        else:
-            self.fields['DocumentFiscalPeriodFocus'] = "Fiscal period focus not found"
-        
-        #DocumentType
-        oNode = self.getNode("//dei:DocumentType[@contextRef]")
-        if oNode is not None:
-            self.fields['DocumentType'] = oNode.text
-        else:
-            self.fields['DocumentType'] = "Fiscal period focus not found"
-
-        #DocumentPeriodEndDate
-        oNode = self.getNode("//dei:DocumentPeriodEndDate[@contextRef]")
-        if oNode is not None:
-            self.fields["DocumentPeriodEndDate"] = oNode.text
-        else:
-            self.fields["DocumentPeriodEndDate"] = "Document Period End Date not found."
-        
-        self.fields['ContextForDurations'] = oNode.get('contextRef')
+        for node in self.iter_namespace(ns='dei'):
+            tag = re.search('[^{}]*$', node.tag).group()
+            self.fields[tag] = node.text
 
         # This is super ugly
         # Instances context references are listed in <xbrli:context> blocks --> "//xbrli:context"
@@ -161,11 +98,14 @@ class XBRL:
         context = '//xbrli:context'
         period = '[(xbrli:period'
         instant = '[xbrli:instant'
+        duration = '[xbrli:endDate'
         text = '[text()="{0}"]])'.format(self.fields['DocumentPeriodEndDate'])
         entity = ' and (xbrli:entity'
         segment = '[not (xbrli:segment)])]'
-        xpath = context + period + instant + text + entity + segment
-        self.fields['ContextForInstants'] = self.oInstance.xpath(xpath,namespaces=self.ns)[0].get('id')
+        instant_xpath = context + period + instant + text + entity + segment
+        duration_xpath = context + period + duration + text + entity + segment
+        self.fields['ContextForInstants'] = self.oInstance.xpath(instant_xpath,namespaces=self.ns)[0].get('id')
+        self.fields['ContextForDurations'] = self.oInstance.xpath(duration_xpath,namespaces=self.ns)[0].get('id')
 
     def get_context_start_date(self, context_id):
         if context_id not in self._context_start_dates:
@@ -247,15 +187,3 @@ class XBRL:
             if something is not None:
                 #MsgBox "Use this context: " + oNode_Alt.selectSingleNode("@id").text
                 return oNode_Alt.get("id")
-
-
-
-# This is super ugly
-# Instances context references are listed in <xbrli:context> blocks --> "//xbrli:context"
-# We want the child period that is instance type --> "[(xbrli:period[xbrli:instant"
-# With text value of DocumentPeriodEndDate --> '[text()="{0}"]])'.format(x.fields['DocumentPeriodEndDate']
-# But there are many contextRefs with this date.  We want the "root" one with no segments --> "and (xbrli:entity[not (xbrli:segment)])]"
-#y='//xbrli:context[(xbrli:period[xbrli:instant[text()="{0}"]]) and (xbrli:entity[not (xbrli:segment)])]'.format(x.fields['DocumentPeriodEndDate'])
-#x.oInstance.xpath(y,namespaces=x.ns)
-
-
