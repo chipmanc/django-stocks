@@ -310,8 +310,8 @@ class Index(models.Model):
     def localpath(self):
         return '%s/%s/%s/' % (DATA_DIR, self.company.cik, self.txt()[:-4])
 
-    def localcik(self):
-        return '%s/%s/' % (DATA_DIR, self.company.cik)
+    #def localcik(self):
+    #    return '%s/%s/' % (DATA_DIR, self.company.cik)
     
     def html(self):
         filename = self.localfile()
@@ -327,9 +327,9 @@ class Index(models.Model):
 
     def download(self, verbose=False):
         
-        d = self.localcik()
-        if not os.path.isdir(d):
-            os.makedirs(d)
+        #d = self.localcik()
+        #if not os.path.isdir(d):
+        #    os.makedirs(d)
             
         d = self.localpath()
         if not os.path.isdir(d):
@@ -371,10 +371,10 @@ class Index(models.Model):
             print 'no xbrl found. this option is for 10-ks.'
             return
         x = xbrl.XBRL(filepath, opener=open_method)
-        x.fields['FiscalPeriod'] = x.fields['DocumentFiscalPeriodFocus']
-        x.fields['FiscalYear'] = x.fields['DocumentFiscalYearFocus']
-        x.fields['SECFilingPage'] = self.index_link()
-        x.fields['LinkToXBRLInstance'] = self.xbrl_link() 
+        #x.fields['FiscalPeriod'] = x.fields['DocumentFiscalPeriodFocus']
+        #x.fields['FiscalYear'] = x.fields['DocumentFiscalYearFocus']
+        #x.fields['SECFilingPage'] = self.index_link()
+        #x.fields['LinkToXBRLInstance'] = self.xbrl_link() 
         return x
         
     def ticker(self):

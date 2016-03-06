@@ -105,6 +105,8 @@ def get_filing_list(year, quarter, reprocess=False):
             get_filing_list.retry()
     Index.objects.bulk_create(bulk_indexes, batch_size=2500)
     IndexFile.objects.filter(id=ifile.id).update(complete=timezone.now())
+    time_to_complete = ifile.complete - ifile.downloaded
+    logger.info('Added {0} in {1} seconds'.format(ifile.filename, time_to_complete))
 
 
 @shared_task
@@ -122,7 +124,6 @@ def import_attrs(**kwargs):
     print_progress(msg, current_count, total_count)
 
     ifile.download(verbose=kwargs['verbose'])
-
     x = None
     error = None
     try:
@@ -142,17 +143,8 @@ def import_attrs(**kwargs):
     while 1:
         try:
             company = ifile.company
-            bulk_objects = set()
-            sub_current = 0
-            for node, sub_total in x.iter_namespace():
-                sub_current += 1
-                if not sub_current % commit_freq:
-                    print_progress(msg,
-                                        current_count,
-                                        total_count,
-                                        sub_current,
-                                        sub_total)
-
+            bulk_objects = []
+            for node in x.iter_namespace():
                 matches = re.findall('^\{([^\}]+)\}(.*)$', node.tag)
                 if matches:
                     ns, attr_name = matches[0]
@@ -160,22 +152,15 @@ def import_attrs(**kwargs):
                     ns = None
                     attr_name = node
 
-                decimals = node.attrib.get('decimals', None)
-                if decimals is None:
-                    continue
-                elif decimals.upper() == 'INF':
-                    decimals = 6
-                else:
-                    decimals = int(decimals)
-
-                                                     
                 context_id = node.attrib['contextRef']
+                if context_id not in [x.fields['ContextForInstants'], x.fields['ContextForDurations']]:
+                    continue
                 start_date = x.get_context_start_date(context_id)
-                if not start_date:
-                    continue
                 end_date = x.get_context_end_date(context_id)
-                if not end_date:
+
+                if not node.attrib.get('unitRef', None):
                     continue
+
                 namespace, _ = Namespace.objects.get_or_create(name=ns.strip())
                 attribute, _ = Attribute.objects.get_or_create(namespace=namespace,
                                                                       name=attr_name,
@@ -207,12 +192,12 @@ def import_attrs(**kwargs):
                 AttributeValue.objects.bulk_create(bulk_objects)
                 bulk_objects = []
 
-            ticker = ifile.ticker()
-            Index.objects.filter(id=ifile.id).update(attributes_loaded=True, _ticker=ticker)
+            #ticker = ifile.ticker()
+            #Index.objects.filter(id=ifile.id).update(attributes_loaded=True, _ticker=ticker)
             Attribute.do_update()
-            Unit.do_update()
+            #Unit.do_update()
             break
 
-        except DatabaseError, e:
-            print e
-    print_progress('Importing attributes.', current_count, total_count)
+        except DatabaseError as e:
+            logger.error(e)
+            break
