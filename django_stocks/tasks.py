@@ -16,7 +16,6 @@ from django.db import DatabaseError
 from django.utils import timezone
 from django.utils.encoding import force_text
 
-from django_stocks.constants import MAX_QUANTIZE
 from django_stocks.models import Attribute, AttributeValue, Company, Index, IndexFile, Namespace, Unit, DATA_DIR
 
 logger = logging.getLogger(__name__)
@@ -141,9 +140,6 @@ def import_attrs(**kwargs):
             value = (node.text or '').strip()
             if not value:
                 continue
-            assert len(value.split('.')[0]) <= MAX_QUANTIZE, \
-                'Value too large, must be less than %i digits: %i %s' \
-                % (MAX_QUANTIZE, len(value), repr(value))
 
             Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
             if AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date, end_date=end_date).exists():
