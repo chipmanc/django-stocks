@@ -40,7 +40,7 @@ def get_filing_list(year, quarter, reprocess=False):
 
     unique_companies = set()
     bulk_companies = set()
-    bulk_indexes = []
+    bulk_indexes = set()
 
     if not os.path.isdir(DATA_DIR):
         os.makedirs(DATA_DIR)
@@ -74,7 +74,7 @@ def get_filing_list(year, quarter, reprocess=False):
         if form in ['10-K', '10-Q', '20-F', '10-K/A', '10-Q/A', '20-F/A']:
             if not Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename).exists():
                 unique_companies.add(Company(cik=cik, name=name))
-                bulk_indexes.append(Index(company_id=cik, form=form, date=dt, year=year, quarter=quarter, filename=filename,))
+                bulk_indexes.add(Index(company_id=cik, form=form, date=dt, year=year, quarter=quarter, filename=filename,))
 
     bulk_companies = {company for company in unique_companies
                      if not Company.objects.filter(cik=company.cik).exists()}
@@ -115,7 +115,7 @@ def import_attrs(**kwargs):
         
     while 1:
         company = ifile.company
-        bulk_objects = []
+        bulk_objects = set()
         for node in x.iter_namespace():
             matches = re.findall('^\{([^\}]+)\}(.*)$', node.tag)
             if matches:
@@ -144,7 +144,7 @@ def import_attrs(**kwargs):
             Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
             if AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date, end_date=end_date).exists():
                 continue
-            bulk_objects.append(AttributeValue(
+            bulk_objects.add(AttributeValue(
                 company=company,
                 attribute=attribute,
                 start_date=start_date,
@@ -156,7 +156,7 @@ def import_attrs(**kwargs):
 
         if bulk_objects:
             AttributeValue.objects.bulk_create(bulk_objects)
-            bulk_objects = []
+            bulk_objects.clear()
 
         Attribute.do_update()
         break
