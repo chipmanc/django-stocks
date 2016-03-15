@@ -68,9 +68,6 @@ class Command(BaseCommand):
                 print>>sys.stderr, ('Warning: the company you specified with cik %s is '
                                     'either not marked for loading or does not exist.') % (options['cik'])
 
-            total_count = q.count()
-            current_count = 0
-            commit_freq = 300
             kwargs = options.copy()
             for ifile in q.iterator():
                 kwargs['filename'] = ifile.filename

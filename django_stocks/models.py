@@ -128,6 +128,12 @@ class AttributeValue(models.Model):
         ordering = ('-attribute__total_values', '-start_date', 'attribute__name')
         unique_together = (('company', 'attribute', 'start_date', 'end_date'),)
         index_together = (('company', 'attribute', 'start_date'),)
+
+    def __hash__(self):
+        return hash((self.company, self.attribute, self.value, self.start_date, self.end_date))
+
+    def __eq__(self, other):
+        return self == other
         
     def __unicode__(self):
         return '%s %s=%s %s on %s' % (
@@ -274,6 +280,12 @@ class Index(models.Model):
         help_text=_('If false, errors were encountered trying to parse the associated files.'))
     
     error = models.TextField(blank=True, null=True)
+
+    def __hash__(self):
+        return hash((self.company, self.form, self.filename, self.year))
+
+    def __eq__(self, other):
+        return self == other
     
     class Meta:
         verbose_name_plural = _('indices')
