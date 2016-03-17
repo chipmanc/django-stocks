@@ -1,5 +1,42 @@
-import re
-import urllib2
+import os
+from urlparse import urlparse
+
+from django_stocks.settings import DATA_DIR
+
+
+class suppress(object):
+    '''
+    Context manager to suppress errors
+    '''
+
+    def __init__(self, *args):
+        self.args = args
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, etype, exc, tb):
+        if etype in self.args:
+            return True
+
+
+class prep_fs_download(object):
+    '''
+    Context manager to create directories needed for URL.
+    '''
+
+    def __init__(self, url):
+        self.url = url
+        self.scheme, self.host, self.path = urlparse(self.url)[:3]
+
+    def __enter__(self):
+        dirpath, fn = os.path.split(self.path)
+        localpath = os.path.join(DATA_DIR, dirpath[1:])
+        os.makedirs(localpath)
+        return os.path.join(localpath, fn)
+
+    def __exit__(self, etype, exc, tb):
+        return
 
 
 def lookup_cik(ticker, name=None):

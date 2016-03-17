@@ -69,10 +69,9 @@ class AttributeValueAdmin(admin.ModelAdmin):
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('cik',
                     'name',
+                    'ticker',
                     'min_date',
-                    'max_date',
-                    'load',)
-    list_filter = ('load',)
+                    'max_date',)
     
     search_fields = ('cik',
                      'name',)
@@ -83,18 +82,6 @@ class CompanyAdmin(admin.ModelAdmin):
                        'values_link',
                        'min_date',
                        'max_date',)
-    
-    actions = ('enable_load',
-               'disable_load',)
-    
-    def enable_load(self, request, queryset):
-        models.Company.objects.filter(cik__in=queryset).update(load=True)
-        models.Index.objects.filter(company__cik__in=queryset, attributes_loaded=True).update(attributes_loaded=False)
-    enable_load.short_description = 'Enable attribute loading of selected %(verbose_name_plural)s'
-    
-    def disable_load(self, request, queryset):
-        models.Company.objects.filter(cik__in=queryset).update(load=False)
-    disable_load.short_description = 'Disable attribute loading of selected %(verbose_name_plural)s'
     
     def filings_link(self, obj=None):
         if not obj:
@@ -147,7 +134,6 @@ class IndexAdmin(admin.ModelAdmin):
     list_display = ('filename',
                     'company',
                     'cik',
-                    #'ticker',
                     'form',
                     'date',
                     'quarter',
@@ -164,6 +150,7 @@ class IndexAdmin(admin.ModelAdmin):
                    'form',)
     
     readonly_fields = ('cik',
+                       'html_link',
                        'xbrl_link',)
     
     def cik(self, obj=None):

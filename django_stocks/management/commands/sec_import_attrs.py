@@ -25,7 +25,7 @@ class Command(BaseCommand):
                             default=datetime.now().year,
                             type=int)
         parser.add_argument('--end-year',
-                            default=datetime.now().year,
+                            default=datetime.now().year + 1,
                             type=int)
         parser.add_argument('--cik',
                             type=int,
@@ -52,18 +52,12 @@ class Command(BaseCommand):
             q = models.Index.objects.filter(
                 year__gte=options['start_year'],
                 year__lte=options['end_year'])
-            if not options['force']:
-                q = q.filter(
-                    attributes_loaded__exact=0,
-                    valid__exact=1,)
             if options['forms']:
                 q = q.filter(form__in=options['forms'])
             if options['quarter']:
                 q = q.filter(quarter__exact=options['quarter'])
             if options['cik']:
                 q = q.filter(company__cik=options['cik'])
-            if not options['force']:
-                q = q.filter(company__load=True)
             if not q.count():
                 print>>sys.stderr, ('Warning: the company you specified with cik %s is '
                                     'either not marked for loading or does not exist.') % (options['cik'])
