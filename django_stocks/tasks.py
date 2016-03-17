@@ -1,61 +1,46 @@
 from __future__ import absolute_import
 
-from datetime import date, datetime
+from datetime import date
 import logging
 import os
 import re
-from StringIO import StringIO
-import sys
-import time
-import traceback
-import urllib
+from urlparse import urlparse
 from zipfile import ZipFile
 
 from celery import shared_task
 from django.db import DatabaseError
 from django.utils import timezone
-from django.utils.encoding import force_text
 
-from django_stocks.models import Attribute, AttributeValue, Company, Index, IndexFile, Namespace, Unit, DATA_DIR
+from django_stocks.models import Attribute, AttributeValue, Company, Index, IndexFile, Namespace, Unit
+from django_stocks.settings import DATA_DIR
+from django_stocks.utils import prep_fs_download, suppress
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(max_retries=5, default_retry_delay=20)
+@shared_task(max_retries=5, default_retry_delay=5)
 def get_filing_list(year, quarter, reprocess=False):
     """
     Gets the list of filings and download locations for the given
     year and quarter.
     """
-    edgar_host = 'ftp://ftp.sec.gov'
-    path = '/edgar/full-index/{0}/QTR{1}/company.zip'.format(year, quarter)
-    url = edgar_host + path
-    ifile, _ = IndexFile.objects.get_or_create(
-        year=year, quarter=quarter, defaults=dict(filename=path))
+    ifile, _ = IndexFile.objects.get_or_create(year=year, quarter=quarter, filename=path)
     if ifile.complete and not reprocess:
         logger.info('Index file {0} already loaded'.format(ifile.filename))
         return
+    ifile.complete = None
     ifile.downloaded = timezone.now()
     ifile.save()
 
-    unique_companies = set()
     bulk_companies = set()
     bulk_indexes = set()
 
-    if not os.path.isdir(DATA_DIR):
-        os.makedirs(DATA_DIR)
-    fn = os.path.join(DATA_DIR, 'company_%d_%d.zip' % (year, quarter))
-    if os.path.exists(fn) and reprocess:
-        os.remove(fn)
-    if not os.path.exists(fn):
-        try:
-            compressed_data = urllib.urlopen(url).read()
-        except IOError as e:
-            logger.warning('Could not download {0}'.format(ifile.filename))
-            get_filing_list.retry()
-        fileout = file(fn, 'w')
-        fileout.write(compressed_data)
-        fileout.close()
+    edgar_uri = 'ftp://ftp.sec.gov/edgar/full-index/{0}/QTR{1}/company.zip'.format(year, quarter)
+    with suppress(OSError), prep_fs_download(edgar_uri) as fn:
+        if os.path.exists(fn) and reprocess:
+            os.remove(fn)
+        elif not os.path.exists(fn):
+            urllib.urlretrieve(edgar_uri, fn)
 
     zip = ZipFile(fn)
     zdata = zip.read('company.idx')
@@ -73,10 +58,10 @@ def get_filing_list(year, quarter, reprocess=False):
 
         if form in ['10-K', '10-Q', '20-F', '10-K/A', '10-Q/A', '20-F/A']:
             if not Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename).exists():
-                unique_companies.add(Company(cik=cik, name=name))
-                bulk_indexes.add(Index(company_id=cik, form=form, date=dt, year=year, quarter=quarter, filename=filename,))
+                bulk_companies.add(Company(cik=cik, name=name))
+                bulk_indexes.add(Index(company=Company(cik=cik), form=form, date=dt, year=year, quarter=quarter, filename=filename,))
 
-    bulk_companies = {company for company in unique_companies
+    bulk_companies = {company for company in bulk_companies
                      if not Company.objects.filter(cik=company.cik).exists()}
     if bulk_companies:
         try:
@@ -89,6 +74,7 @@ def get_filing_list(year, quarter, reprocess=False):
     except Exception as e:
         logger.warning(e)
         get_filing_list.retry()
+
     IndexFile.objects.filter(id=ifile.id).update(complete=timezone.now())
     time_to_complete = ifile.complete - ifile.downloaded
     logger.info('Added {0} in {1} seconds'.format(ifile.filename, time_to_complete))
@@ -97,23 +83,15 @@ def get_filing_list(year, quarter, reprocess=False):
 @shared_task
 def import_attrs(**kwargs):
     ifile = Index.objects.get(filename=kwargs['filename'])
-    ifile.download(verbose=kwargs['verbose'])
-    x = None
-    error = None
     try:
         x = ifile.xbrl()
-    except Exception, e:
-        ferr = StringIO()
-        traceback.print_exc(file=ferr)
-        error = ferr.getvalue()
-        Index.objects.filter(id=ifile.id).update(valid=False, error=error)
-
-    if x is None:
-        error = 'No XBRL found.'
-        Index.objects.filter(id=ifile.id).update(valid=False, error=error)
+    except IOError:
+        msg = "No XBRL found in %s" % self.filename
+        logger.error(msg)
+        Index.objects.filter(id=ifile.id).update(valid=False, error=msg)
         return
         
-    while 1:
+    while True:
         company = ifile.company
         bulk_objects = set()
         for node in x.iter_namespace():
@@ -141,9 +119,9 @@ def import_attrs(**kwargs):
             if not value:
                 continue
 
-            Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
             if AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date, end_date=end_date).exists():
                 continue
+            Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
             bulk_objects.add(AttributeValue(
                 company=company,
                 attribute=attribute,

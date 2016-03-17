@@ -1,5 +1,7 @@
+import logging
 import os
 import sys
+import urllib
 import zipfile
 
 from django.conf import settings
@@ -10,7 +12,10 @@ from django.utils.translation import ugettext, ugettext_lazy as _
 from django_stocks import xbrl
 
 import constants as c
-from settings import DATA_DIR
+from .settings import DATA_DIR
+from .utils import prep_fs_download, suppress
+
+logger = logging.getLogger(__name__)
 
 class Namespace(models.Model):
     """
@@ -80,9 +85,7 @@ class Attribute(models.Model):
     def do_update(cls, *args, **kwargs):
         q = cls.objects.filter(total_values_fresh=False).only('id', 'name')
         total = q.count()
-        i = 0
         for r in q.iterator():
-            i += 1
             total_values = AttributeValue.objects.filter(attribute__name=r.name).count()
             cls.objects.filter(id=r.id).update(
                 total_values=total_values,
@@ -178,11 +181,6 @@ class Company(models.Model):
         null=False,
         help_text=_('The name of the company.'))
     
-    load = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text=_('If checked, all values for load-enabled attributes will be loaded for this company.'))
-    
     min_date = models.DateField(
         blank=True,
         null=True,
@@ -200,14 +198,13 @@ class Company(models.Model):
             for this company.'''))
 
     ticker = models.CharField(
-        max_length=50,
+        max_length=15,
         db_index=True,
         db_column='ticker',
         verbose_name=_('ticker'),
         blank=True,
         null=True,
-        help_text=_('''Caches the trading symbol if one is detected in the
-            filing during attribute load.'''))
+        help_text=_('''Trading symbol of the security.'''))
     
     class Meta:
         verbose_name_plural = _('companies')
@@ -297,110 +294,42 @@ class Index(models.Model):
                           ('company', 'date', 'filename'),)
         ordering = ('-date', 'filename')
     
+    @property
     def xbrl_link(self):
-        if self.form.startswith('10-K') or self.form.startswith('10-Q'):
-            id = self.filename.split('/')[-1][:-4]
-            return 'http://www.sec.gov/Archives/edgar/data/%s/%s/%s-xbrl.zip' % (self.company.cik, id.replace('-',''), id)
-        return None
-        
+        directory, fn = os.path.split(self.filename)
+        directory += '/' + fn[:-4].replace('-','')
+        fn = fn[:-4] + '-xbrl.zip'
+        filename = os.path.join(directory, fn)
+        xbrl_link = 'http://www.sec.gov/Archives/%s' % filename
+        return xbrl_link
+
+    @property
     def html_link(self):
         return 'http://www.sec.gov/Archives/%s' % self.filename
 
-    def index_link(self):
-        id = self.filename.split('/')[-1][:-4]
-        return 'http://www.sec.gov/Archives/edgar/data/%s/%s/%s-index.htm' % (self.company.cik, id.replace('-',''), id)
+    @property
+    def local_path(self):
+        return os.path.join(DATA_DIR, str(self.company.cik))
         
-    def txt(self):
-        return self.filename.split('/')[-1]
-        
-    def localfile(self):
-        filename = '%s/%s/%s/%s' % (DATA_DIR, self.company.cik,self.txt()[:-4],self.txt())
-        if os.path.exists(filename):
-            return filename
-        return None
-        
-    def localpath(self):
-        return '%s/%s/%s/' % (DATA_DIR, self.company.cik, self.txt()[:-4])
-
-    #def localcik(self):
-    #    return '%s/%s/' % (DATA_DIR, self.company.cik)
-    
-    def html(self):
-        filename = self.localfile()
-        if not filename: 
-            return None
-        f = open(filename,'r').read()
-        f_lower = f.lower()
-        try:
-            return f[f_lower.find('<html>'):f_lower.find('</html>')+4]
-        except:
-            print 'html tag not found'
-            return f
-
-    def download(self, verbose=False):
-        
-        #d = self.localcik()
-        #if not os.path.isdir(d):
-        #    os.makedirs(d)
-            
-        d = self.localpath()
-        if not os.path.isdir(d):
-            os.makedirs(d)
-            
-        os.chdir(self.localpath())
-        
-        html_link = self.html_link()
-        xbrl_link = self.xbrl_link()
-        if verbose:
-            print 'html_link:',
-            print 'xbrl_link:',xbrl_link
-            
-        if xbrl_link:
-            if not os.path.exists(xbrl_link.split('/')[-1]):
-                if verbose:
-                    os.system('wget %s' % xbrl_link)
-                else:
-                    os.system('wget --quiet %s' % xbrl_link)
-
     def xbrl_localpath(self):
-        try:
-            os.chdir(self.localpath())
-        except:
-            self.download()
+        _, fn = os.path.split(self.xbrl_link)
         files = os.listdir('.')
-        archives = [elem for elem in files if elem.endswith('.zip')]
-        if not archives:
+        if fn not in files:
             return None, None
-        zf = zipfile.ZipFile(archives[0])
+        zf = zipfile.ZipFile(fn)
         xml = sorted([elem for elem in zf.namelist() if elem.endswith('.xml')], key=len)
         if not len(xml):
             return None, None
         return xml[0], zf.open
 
     def xbrl(self):
-        filepath, open_method = self.xbrl_localpath()
+        with suppress(OSError), prep_fs_download(xbrl_link) as fn:
+            urllib.urlretrieve(self.xbrl_link, fn)
+
+        filepath, open_method = self.__xbrl_localpath()
         if not filepath:
-            print 'no xbrl found. this option is for 10-ks.'
-            return
+            raise IOError
         x = xbrl.XBRL(filepath, opener=open_method)
-        #x.fields['FiscalPeriod'] = x.fields['DocumentFiscalPeriodFocus']
-        #x.fields['FiscalYear'] = x.fields['DocumentFiscalYearFocus']
-        #x.fields['SECFilingPage'] = self.index_link()
-        #x.fields['LinkToXBRLInstance'] = self.xbrl_link() 
         return x
-        
-    def ticker(self):
-        """
-        Retrieves the company's stock ticker from an XML filing.
-        Note, this is not guaranteed to exist.
-        """
-        if self._ticker:
-            return self._ticker
-        filepath, _ = self.xbrl_localpath()
-        if filepath:
-            ticker = filepath.split('/')[-1].split('-')[0].strip().upper()
-            if ticker:
-                self._ticker = ticker
-            else:
-                self._ticker = None
-        return self._ticker
+
+    __xbrl_localpath = xbrl_localpath
