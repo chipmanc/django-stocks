@@ -25,7 +25,7 @@ class Command(BaseCommand):
                             default=datetime.now().year,
                             type=int)
         parser.add_argument('--end-year',
-                            default=datetime.now().year + 1,
+                            default=datetime.now().year,
                             type=int)
         parser.add_argument('--cik',
                             type=int,
