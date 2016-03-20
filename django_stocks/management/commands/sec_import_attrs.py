@@ -1,14 +1,9 @@
-import collections
 from datetime import datetime
-import random
-import re
 from StringIO import StringIO
 import sys
-import time
 import traceback
 
 from django.core.management.base import BaseCommand
-from django.db import DatabaseError
 
 from django_stocks import models
 from django_stocks.tasks import import_attrs
@@ -59,15 +54,15 @@ class Command(BaseCommand):
             if options['cik']:
                 q = q.filter(company__cik=options['cik'])
             if not q.count():
-                print>>sys.stderr, ('Warning: the company you specified with cik %s is '
-                                    'either not marked for loading or does not exist.') % (options['cik'])
+                print>>sys.stderr, ('Warning: the company you specified with cik %s is either '
+                                    'not marked for loading or does not exist.') % (options['cik'])
 
             kwargs = options.copy()
             for ifile in q.iterator():
                 kwargs['filename'] = ifile.filename
                 import_attrs.delay(**kwargs)
 
-        except Exception, e:
+        except Exception:
             ferr = StringIO()
             traceback.print_exc(file=ferr)
             error = ferr.getvalue()

@@ -1,15 +1,8 @@
-#from optparse import make_option
 from datetime import date, timedelta
 
-from django_stocks.tasks import get_filing_list
-
 from django.core.management.base import BaseCommand
-from django.conf import settings
 
-
-def removeNonAscii(s):
-    return "".join(i for i in s if ord(i) < 128)
-
+from django_stocks.tasks import get_filing_list
 
 class Command(BaseCommand):
     def add_arguments(self, parser):
@@ -17,7 +10,7 @@ class Command(BaseCommand):
                             default=date.today().year,
                             type=int)
         parser.add_argument('--end-year',
-                            default=date.today().year,
+                            default=date.today().year + 1,
                             type=int)
         parser.add_argument('--quarter',
                             default=None)

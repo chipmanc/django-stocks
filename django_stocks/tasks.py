@@ -2,18 +2,14 @@ from __future__ import absolute_import
 
 from datetime import date
 import logging
-import os
 import re
-from urlparse import urlparse
-from zipfile import ZipFile
 
 from celery import shared_task
 from django.db import DatabaseError
 from django.utils import timezone
 
-from django_stocks.models import Attribute, AttributeValue, Company, Index, IndexFile, Namespace, Unit
-from django_stocks.settings import DATA_DIR
-from django_stocks.utils import prep_fs_download, suppress
+from django_stocks.models import (Attribute, AttributeValue, Company,
+                                  Index, IndexFile, Namespace, Unit)
 
 logger = logging.getLogger(__name__)
 
@@ -21,30 +17,18 @@ logger = logging.getLogger(__name__)
 @shared_task(max_retries=5, default_retry_delay=5)
 def get_filing_list(year, quarter, reprocess=False):
     """
-    Gets the list of filings and download locations for the given
-    year and quarter.
+    Get the list of filings for the given year and quarter
     """
-    ifile, _ = IndexFile.objects.get_or_create(year=year, quarter=quarter, filename=path)
-    if ifile.complete and not reprocess:
-        logger.info('Index file {0} already loaded'.format(ifile.filename))
+    edgar_uri = 'ftp://ftp.sec.gov/edgar/full-index/{0}/QTR{1}/company.zip'.format(year, quarter)
+    ifile, data = IndexFile.download(edgar_uri, year, quarter, reprocess)
+    if not ifile:
         return
-    ifile.complete = None
-    ifile.downloaded = timezone.now()
-    ifile.save()
+
+    zdata = data.read('company.idx')
+    lines = zdata.split('\n')
 
     bulk_companies = set()
     bulk_indexes = set()
-
-    edgar_uri = 'ftp://ftp.sec.gov/edgar/full-index/{0}/QTR{1}/company.zip'.format(year, quarter)
-    with suppress(OSError), prep_fs_download(edgar_uri) as fn:
-        if os.path.exists(fn) and reprocess:
-            os.remove(fn)
-        elif not os.path.exists(fn):
-            urllib.urlretrieve(edgar_uri, fn)
-
-    zip = ZipFile(fn)
-    zdata = zip.read('company.idx')
-    lines = zdata.split('\n')
 
     for form_line in lines[10:]:
         if form_line.strip() == '':
@@ -57,12 +41,14 @@ def get_filing_list(year, quarter, reprocess=False):
         dt = date(*map(int, dt.split('-')))
 
         if form in ['10-K', '10-Q', '20-F', '10-K/A', '10-Q/A', '20-F/A']:
-            if not Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename).exists():
+            query = Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename)
+            if not query.exists():
                 bulk_companies.add(Company(cik=cik, name=name))
-                bulk_indexes.add(Index(company=Company(cik=cik), form=form, date=dt, year=year, quarter=quarter, filename=filename,))
+                bulk_indexes.add(Index(company=Company(cik=cik), form=form, date=dt,
+                                       year=year, quarter=quarter, filename=filename,))
 
     bulk_companies = {company for company in bulk_companies
-                     if not Company.objects.filter(cik=company.cik).exists()}
+                      if not Company.objects.filter(cik=company.cik).exists()}
     if bulk_companies:
         try:
             Company.objects.bulk_create(bulk_companies, batch_size=1000)
@@ -75,7 +61,8 @@ def get_filing_list(year, quarter, reprocess=False):
         logger.warning(e)
         get_filing_list.retry()
 
-    IndexFile.objects.filter(id=ifile.id).update(complete=timezone.now())
+    ifile.complete = timezone.now()
+    ifile.save()
     time_to_complete = ifile.complete - ifile.downloaded
     logger.info('Added {0} in {1} seconds'.format(ifile.filename, time_to_complete))
 
@@ -86,11 +73,11 @@ def import_attrs(**kwargs):
     try:
         x = ifile.xbrl()
     except IOError:
-        msg = "No XBRL found in %s" % self.filename
+        msg = "No XBRL found in %s" % ifile.filename
         logger.error(msg)
         Index.objects.filter(id=ifile.id).update(valid=False, error=msg)
         return
-        
+
     while True:
         company = ifile.company
         bulk_objects = set()
@@ -119,22 +106,24 @@ def import_attrs(**kwargs):
             if not value:
                 continue
 
-            if AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date, end_date=end_date).exists():
+            if AttributeValue.objects.filter(company=company, attribute=attribute,
+                                             start_date=start_date, end_date=end_date).exists():
                 continue
             Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
-            bulk_objects.add(AttributeValue(
-                company=company,
-                attribute=attribute,
-                start_date=start_date,
-                end_date=end_date,
-                value=value,
-                unit=unit,
-                filing_date=ifile.date,
-            ))
+            bulk_objects.add(AttributeValue(company=company,
+                                            attribute=attribute,
+                                            start_date=start_date,
+                                            end_date=end_date,
+                                            value=value,
+                                            unit=unit,
+                                            filing_date=ifile.date,))
 
         if bulk_objects:
             AttributeValue.objects.bulk_create(bulk_objects)
             bulk_objects.clear()
-
+        if x.fields.get('TradingSymbol', None):
+            company.ticker = x.fields['TradingSymbol'].upper()
+            company.save()
         Attribute.do_update()
+        Index.objects.filter(id=ifile.id).update(attributes_loaded=1)
         break

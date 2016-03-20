@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from django.core.urlresolvers import reverse
@@ -23,7 +22,7 @@ class AttributeAdmin(admin.ModelAdmin):
 
     search_fields = ('name',)
     readonly_fields = ('total_values',)
-    
+
 
 @admin.register(models.AttributeValue)
 class AttributeValueAdmin(admin.ModelAdmin):
@@ -40,24 +39,24 @@ class AttributeValueAdmin(admin.ModelAdmin):
 
     search_fields = ('company__name',
                      'attribute__name',)
-    
+
     readonly_fields = ('company',
                        'attribute',
                        'attribute_total_values',
                        'unit',)
-    
+
     exclude = ('unit',)
-    
+
     def company_name(self, obj=None):
         if not obj:
             return ''
         return obj.company.name
-    
+
     def attribute_name(self, obj=None):
         if not obj:
             return ''
         return obj.attribute.name
-    
+
     def attribute_total_values(self, obj=None):
         if not obj:
             return ''
@@ -72,17 +71,18 @@ class CompanyAdmin(admin.ModelAdmin):
                     'ticker',
                     'min_date',
                     'max_date',)
-    
+
     search_fields = ('cik',
-                     'name',)
-    
+                     'name',
+                     'ticker')
+
     readonly_fields = ('cik',
                        'name',
                        'filings_link',
                        'values_link',
                        'min_date',
                        'max_date',)
-    
+
     def filings_link(self, obj=None):
         if not obj:
             return ''
@@ -93,7 +93,7 @@ class CompanyAdmin(admin.ModelAdmin):
         return '<a href="%s" target="_blank" class="button">View %i</a>' % (url, count)
     filings_link.short_description = 'filings'
     filings_link.allow_tags = True
-    
+
     def values_link(self, obj=None):
         if not obj:
             return ''
@@ -112,15 +112,13 @@ class IndexFileAdmin(admin.ModelAdmin):
                     'quarter',
                     'downloaded',
                     'complete',)
-    
+
     actions = ('mark_unprocessed',)
-    
+
     def mark_unprocessed(self, request, queryset):
-        models.IndexFile.objects\
-            .filter(id__in=queryset.values_list('id', flat=True))\
-            .update(complete=None, downloaded=None)
+        queryset.update(complete=None, downloaded=None)
     mark_unprocessed.short_description = 'Mark selected %(verbose_name_plural)s as unprocessed'
-    
+
     def get_readonly_fields(self, request, obj=None):
         exclude = []
         return [
@@ -142,23 +140,23 @@ class IndexAdmin(admin.ModelAdmin):
 
     search_fields = ('filename',
                      'company__name',)
-    
+
     list_filter = ('attributes_loaded',
                    'valid',
                    'year',
                    'quarter',
                    'form',)
-    
+
     readonly_fields = ('cik',
                        'html_link',
                        'xbrl_link',)
-    
+
     def cik(self, obj=None):
         if not obj:
             return ''
         return obj.company.cik
     cik.admin_order_field = 'company__cik'
-    
+
     def get_readonly_fields(self, request, obj=None):
         exclude = []
         return [

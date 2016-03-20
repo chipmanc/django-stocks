@@ -32,7 +32,8 @@ class prep_fs_download(object):
     def __enter__(self):
         dirpath, fn = os.path.split(self.path)
         localpath = os.path.join(DATA_DIR, dirpath[1:])
-        os.makedirs(localpath)
+        with suppress(OSError):
+            os.makedirs(localpath)
         return os.path.join(localpath, fn)
 
     def __exit__(self, etype, exc, tb):

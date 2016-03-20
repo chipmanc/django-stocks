@@ -4,19 +4,20 @@ import re
 
 import constants as c
 
+
 class XBRL:
 
     def __init__(self, XBRLInstanceLocation, opener=None):
         self.XBRLInstanceLocation = XBRLInstanceLocation
         self.fields = {}
-        
+
         if opener:
             # Allow us to read directly from a ZIP archive without extracting
             # the whole thing.
-            self.EntireInstanceDocument = opener(XBRLInstanceLocation,'r').read()
+            self.EntireInstanceDocument = opener(XBRLInstanceLocation, 'r').read()
         else:
-            self.EntireInstanceDocument = open(XBRLInstanceLocation,'r').read()
-         
+            self.EntireInstanceDocument = open(XBRLInstanceLocation, 'r').read()
+
         self.oInstance = etree.fromstring(self.EntireInstanceDocument)
         self.ns = {}
         for k in self.oInstance.nsmap.keys():
@@ -25,20 +26,20 @@ class XBRL:
         self.ns['xbrli'] = 'http://www.xbrl.org/2003/instance'
         self.ns['xlmns'] = 'http://www.xbrl.org/2003/instance'
         self.GetBaseInformation()
-        #self.loadYear()
-        
+        # self.loadYear()
+
         self._context_start_dates = {}
         self._context_end_dates = {}
 
-    #def loadYear(self):
-    #    self.currentEnd = self.getNode("//dei:DocumentPeriodEndDate").text
-            
+    # def loadYear(self):
+        # self.currentEnd = self.getNode("//dei:DocumentPeriodEndDate").text
+
     def getNodeList(self, xpath, root=None):
         if root is None:
             root = self.oInstance
         oNodelist = root.xpath(xpath, namespaces=self.ns)
         return oNodelist
-        
+
     def getNode(self, xpath, root=None):
         oNodelist = self.getNodeList(xpath, root)
         if len(oNodelist):
@@ -55,34 +56,32 @@ class XBRL:
             yield node
 
     def GetFactValue(self, SeekConcept, ConceptPeriodType):
-                
         factValue = None
-            
         if ConceptPeriodType == c.INSTANT:
             ContextReference = self.fields['ContextForInstants']
         elif ConceptPeriodType == c.DURATION:
             ContextReference = self.fields['ContextForDurations']
         else:
-            #An error occured
+            # An error occured
             return "CONTEXT ERROR"
-        
+
         if not ContextReference:
             return None
 
         oNode = self.getNode("//" + SeekConcept + "[@contextRef='" + ContextReference + "']")
         if oNode is not None:
             factValue = oNode.text
-            if 'nil' in oNode.keys() and oNode.get('nil')=='true':
-                factValue=0
-                #set the value to ZERO if it is nil
-            #if type(factValue)==str:
+            if 'nil' in oNode.keys() and oNode.get('nil') == 'true':
+                factValue = 0
+            # set the value to ZERO if it is nil
+            # if type(factValue)==str:
             try:
                 factValue = float(factValue)
             except:
-                #print 'couldnt convert %s=%s to string' % (SeekConcept,factValue)
+                # print 'couldnt convert %s=%s to string' % (SeekConcept,factValue)
                 factValue = None
                 pass
-            
+
         return factValue
 
     def GetBaseInformation(self):
@@ -104,8 +103,10 @@ class XBRL:
         segment = '[not (xbrli:segment)])]'
         instant_xpath = context + period + instant + text + entity + segment
         duration_xpath = context + period + duration + text + entity + segment
-        self.fields['ContextForInstants'] = self.oInstance.xpath(instant_xpath,namespaces=self.ns)[0].get('id')
-        self.fields['ContextForDurations'] = self.oInstance.xpath(duration_xpath,namespaces=self.ns)[0].get('id')
+        self.fields['ContextForInstants'] = self.oInstance.xpath(instant_xpath,
+                                                                 namespaces=self.ns)[0].get('id')
+        self.fields['ContextForDurations'] = self.oInstance.xpath(duration_xpath,
+                                                                  namespaces=self.ns)[0].get('id')
 
     def get_context_start_date(self, context_id):
         if context_id not in self._context_start_dates:
