@@ -90,10 +90,14 @@ class XBRL:
             self.fields[tag] = node.text
 
         # This is super ugly
-        # Instances context references are listed in <xbrli:context> blocks --> "//xbrli:context"
-        # We want the child period that is instance type --> "[(xbrli:period[xbrli:instant"
-        # With text value of DocumentPeriodEndDate --> '[text()="{0}"]])'.format(x.fields['DocumentPeriodEndDate']
-        # But there are many contextRefs with this date.  We want the "root" one with no segments --> "and (xbrli:entity[not (xbrli:segment)])]"
+        # Instances context references are listed in <xbrli:context> blocks"
+        #     //xbrli:context"
+        # We want the child period that is instance type"
+        #     [(xbrli:period[xbrli:instant"
+        # With text value of DocumentPeriodEndDate
+        #     '[text()="{0}"]])'.format(x.fields['DocumentPeriodEndDate']
+        # But there are many contextRefs with this date.  We want the "root" one with no segments"
+        #     and (xbrli:entity[not (xbrli:segment)])]"
         context = '//xbrli:context'
         period = '[(xbrli:period'
         instant = '[xbrli:instant'

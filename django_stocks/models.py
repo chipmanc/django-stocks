@@ -132,7 +132,8 @@ class AttributeValue(models.Model):
         index_together = (('company', 'attribute', 'start_date'),)
 
     def __hash__(self):
-        return hash((self.company, self.attribute, self.value, self.start_date, self.end_date))
+        return hash((self.company, self.attribute, self.value,
+                     self.start_date, self.end_date))
 
     def __eq__(self, other):
         return self == other
@@ -170,7 +171,9 @@ class IndexFile(models.Model):
     def download(url, year, quarter, reprocess=False):
         path = urlparse(url)[2]
         with prep_fs_download(url) as filename:
-            ifile, _ = IndexFile.objects.get_or_create(year=year, quarter=quarter, filename=path)
+            ifile, _ = IndexFile.objects.get_or_create(year=year,
+                                                       quarter=quarter,
+                                                       filename=path)
             if reprocess or not ifile.downloaded:
                 ifile.complete = None
                 ifile.downloaded = None
@@ -195,7 +198,8 @@ class Company(models.Model):
     cik = models.IntegerField(
         db_index=True,
         primary_key=True,
-        help_text=_('Central index key that uniquely identifies a filing entity.'))
+        help_text=_('Central index key that uniquely identifies a filing '
+                    'entity.'))
 
     name = models.CharField(
         max_length=100,

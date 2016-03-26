@@ -45,7 +45,7 @@ def lookup_cik(ticker, name=None):
     Given a ticker symbol, retrieves the CIK.
     """
     ticker = ticker.strip().upper()
-    
+
     # First try the SEC. In theory, should for all known symbols, even
     # deactivated ones. In practice, fails to work for many, even active ones.
     url = 'http://www.sec.gov/cgi-bin/browse-edgar?CIK={cik}&owner=exclude&Find=Find+Companies&action=getcompany'.format(cik=ticker)
@@ -59,7 +59,7 @@ def lookup_cik(ticker, name=None):
         return match.group().split('=')[-1]
     except StopIteration:
         pass
-    
+
     # Next, try SEC's other CIK lookup form.
     # It doesn't always work with just the ticker, so we also need to pass in
     # company name but it's the next most accurate after the first.
@@ -72,7 +72,7 @@ def lookup_cik(ticker, name=None):
     if name:
         name_parts = name.split(' ')
         for i in xrange(len(name_parts)):
-            url = 'http://www.sec.gov/cgi-bin/cik.pl.c?company={company}'.format(company='+'.join(name_parts[:-(i+1)]))
+            url = 'http://www.sec.gov/cgi-bin/cik.pl.c?company={company}'.format(company='+'.join(name_parts[:-(i + 1)]))
 #            response = urllib2.urlopen(url)
             request = urllib2.Request(url=url)
             response = urllib2.urlopen(request)
@@ -80,10 +80,10 @@ def lookup_cik(ticker, name=None):
             matches = re.findall('CIK=([0-9]+)', data)
             if len(matches) == 1:
                 return matches[0]
-    
+
     # If the SEC search doesn't find anything, then try Yahoo.
     # Should work for all active symbols, but won't work for any deactive
-    # symbols. 
+    # symbols.
     url = 'http://finance.yahoo.com/q/sec?s={symbol}+SEC+Filings'.format(symbol=ticker)
     #print 'url2:',url
 #    response = urllib2.urlopen(url)
@@ -95,4 +95,4 @@ def lookup_cik(ticker, name=None):
         return match.group().split('=')[-1]
     except StopIteration:
         pass
-    
+

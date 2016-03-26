@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand
 
 from django_stocks.tasks import get_filing_list
 
+
 class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--start-year',
@@ -25,9 +26,10 @@ class Command(BaseCommand):
                             type=int,
                             help='The number of days to automatically '
                                  'redownload and reprocess index files.')
-        #help = ("Download new files representing one month of 990s, "
+        # help = ("Download new files representing one month of 990s, "
         #        "ignoring months we already have. Each quarter contains hundreds "
         #        "of thousands of filings; will take a while to run.")
+
     def handle(self, *args, **options):
         reprocess = options['reprocess']
         reprocess_n_days = options['reprocess_n_days']
@@ -37,10 +39,10 @@ class Command(BaseCommand):
 
         for year in range(options['start_year'], options['end_year']):
             for quarter in range(4):
-                if target_quarter and quarter+1 != target_quarter:
+                if target_quarter and quarter + 1 != target_quarter:
                     continue
-                quarter_start = date(year, quarter*3+1, 1)
+                quarter_start = date(year, quarter * 3 + 1, 1)
                 reprocess_date = (quarter_start >
-                        (date.today() - timedelta(days=reprocess_n_days)))
+                                  (date.today() - timedelta(days=reprocess_n_days)))
                 _reprocess = (reprocess or reprocess_date)
-                get_filing_list.delay(year, quarter+1, reprocess=_reprocess)
+                get_filing_list.delay(year, quarter + 1, reprocess=_reprocess)

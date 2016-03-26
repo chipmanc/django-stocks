@@ -41,11 +41,13 @@ def get_filing_list(year, quarter, reprocess=False):
         dt = date(*map(int, dt.split('-')))
 
         if form in ['10-K', '10-Q', '20-F', '10-K/A', '10-Q/A', '20-F/A']:
-            query = Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename)
+            query = Index.objects.filter(company__cik=cik, form=form,
+                                         date=dt, filename=filename)
             if not query.exists():
                 bulk_companies.add(Company(cik=cik, name=name))
-                bulk_indexes.add(Index(company=Company(cik=cik), form=form, date=dt,
-                                       year=year, quarter=quarter, filename=filename,))
+                bulk_indexes.add(Index(company=Company(cik=cik), form=form,
+                                       date=dt, year=year, quarter=quarter,
+                                       filename=filename,))
 
     bulk_companies = {company for company in bulk_companies
                       if not Company.objects.filter(cik=company.cik).exists()}
@@ -64,7 +66,8 @@ def get_filing_list(year, quarter, reprocess=False):
     ifile.complete = timezone.now()
     ifile.save()
     time_to_complete = ifile.complete - ifile.downloaded
-    logger.info('Added {0} in {1} seconds'.format(ifile.filename, time_to_complete))
+    logger.info('Added {0} in {1} seconds'.format(ifile.filename,
+                                                  time_to_complete))
 
 
 @shared_task
@@ -90,7 +93,8 @@ def import_attrs(**kwargs):
                 attr_name = node
 
             context_id = node.attrib['contextRef']
-            if context_id not in [x.fields['ContextForInstants'], x.fields['ContextForDurations']]:
+            if context_id not in [x.fields['ContextForInstants'],
+                                  x.fields['ContextForDurations']]:
                 continue
             start_date = x.get_context_start_date(context_id)
             end_date = x.get_context_end_date(context_id)
@@ -106,10 +110,14 @@ def import_attrs(**kwargs):
             if not value:
                 continue
 
-            if AttributeValue.objects.filter(company=company, attribute=attribute,
-                                             start_date=start_date, end_date=end_date).exists():
+            if AttributeValue.objects.filter(company=company,
+                                             attribute=attribute,
+                                             start_date=start_date,
+                                             end_date=end_date).exists():
                 continue
-            Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
+
+            query = Attribute.objects.filter(id=attribute.id)
+            query.update(total_values_fresh=False)
             bulk_objects.add(AttributeValue(company=company,
                                             attribute=attribute,
                                             start_date=start_date,
