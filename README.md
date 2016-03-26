@@ -87,3 +87,4 @@ Future features
 * Enable Logging
 * Modify management commands to update from Edgar via day, not month
 * Pep8ify
+* Add daily index import
