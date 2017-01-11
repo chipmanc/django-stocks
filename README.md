@@ -3,6 +3,7 @@
 Django-Stocks
 ==========
 
+[![Inline docs](http://inch-ci.org/github/chipmanc/django-stocks.svg?branch=master)](http://inch-ci.org/github/chipmanc/django-stocks)
 This is a Django app that downloads all SEC filings from the EDGAR database
 into your local database. It provides an admin interface to allow you to
 control which indexes and attributes are loaded as well as inspect downloaded
