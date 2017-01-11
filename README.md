@@ -1,3 +1,5 @@
+[![Inline docs](http://inch-ci.org/github/chipmanc/django-stocks.svg?branch=master)](http://inch-ci.org/github/chipmanc/django-stocks)
+
 Django-Stocks
 ==========
 
