@@ -1,16 +1,13 @@
 import os
-import sys
 import zipfile
 
-from django.conf import settings
 from django.db import models
-from django.db.models import Min, Max
-from django.utils.translation import ugettext, ugettext_lazy as _
-
-from django_stocks import xbrl
+from django.utils.translation import ugettext_lazy as _
 
 import constants as c
+from django_stocks import xbrl
 from settings import DATA_DIR
+
 
 class Namespace(models.Model):
     """
@@ -23,10 +20,10 @@ class Namespace(models.Model):
         null=False,
         db_index=True,
         unique=True)
-    
-    
+
     def __unicode__(self):
         return self.name
+
 
 class Unit(models.Model):
     """
@@ -74,7 +71,7 @@ class Attribute(models.Model):
         index_together = (('namespace', 'name'),)
     
     def __unicode__(self):
-        return '%s' % (self.name)
+        return '{}'.format(self.name)
     
     @classmethod
     def do_update(cls, *args, **kwargs):
@@ -138,6 +135,7 @@ class AttributeValue(models.Model):
             self.start_date,
         )
 
+
 class IndexFile(models.Model):
     
     year = models.IntegerField(
@@ -158,8 +156,8 @@ class IndexFile(models.Model):
         ordering = ('-year', 'quarter')
         unique_together = (('year', 'quarter'),)
 
-class Company(models.Model):
 
+class Company(models.Model):
     cik = models.IntegerField(
         db_index=True,
         primary_key=True,
@@ -229,7 +227,8 @@ class Company(models.Model):
 #            except type(self).DoesNotExist:
 #                pass
 #        super(Company, self).save(*args, **kwargs)
-    
+
+
 class Index(models.Model):
     company = models.ForeignKey(
         'Company',
@@ -287,22 +286,27 @@ class Index(models.Model):
     
     def xbrl_link(self):
         if self.form.startswith('10-K') or self.form.startswith('10-Q'):
-            id = self.filename.split('/')[-1][:-4]
-            return 'http://www.sec.gov/Archives/edgar/data/%s/%s/%s-xbrl.zip' % (self.company.cik, id.replace('-',''), id)
-        return None
+            xbrl_id = self.filename.split('/')[-1][:-4]
+            return 'http://www.sec.gov/Archives/edgar/data/{}/{}/{}-xbrl.zip'.format(self.company.cik,
+                                                                                     xbrl_id.replace('-', ''),
+                                                                                     xbrl_id)
+        else:
+            return None
         
     def html_link(self):
         return 'http://www.sec.gov/Archives/%s' % self.filename
 
     def index_link(self):
-        id = self.filename.split('/')[-1][:-4]
-        return 'http://www.sec.gov/Archives/edgar/data/%s/%s/%s-index.htm' % (self.company.cik, id.replace('-',''), id)
+        index_id = self.filename.split('/')[-1][:-4]
+        return 'http://www.sec.gov/Archives/edgar/data/{}/{}/{}-index.htm'.format(self.company.cik,
+                                                                                  index_id.replace('-', ''),
+                                                                                  index_id)
         
     def txt(self):
         return self.filename.split('/')[-1]
         
     def localfile(self):
-        filename = '%s/%s/%s/%s' % (DATA_DIR, self.company.cik,self.txt()[:-4],self.txt())
+        filename = '%s/%s/%s/%s' % (DATA_DIR, self.company.cik, self.txt()[:-4], self.txt())
         if os.path.exists(filename):
             return filename
         return None
@@ -310,14 +314,14 @@ class Index(models.Model):
     def localpath(self):
         return '%s/%s/%s/' % (DATA_DIR, self.company.cik, self.txt()[:-4])
 
-    #def localcik(self):
+    # def localcik(self):
     #    return '%s/%s/' % (DATA_DIR, self.company.cik)
-    
+
     def html(self):
         filename = self.localfile()
         if not filename: 
             return None
-        f = open(filename,'r').read()
+        f = open(filename, 'r').read()
         f_lower = f.lower()
         try:
             return f[f_lower.find('<html>'):f_lower.find('</html>')+4]
@@ -327,8 +331,8 @@ class Index(models.Model):
 
     def download(self, verbose=False):
         
-        #d = self.localcik()
-        #if not os.path.isdir(d):
+        # d = self.localcik()
+        # if not os.path.isdir(d):
         #    os.makedirs(d)
             
         d = self.localpath()
@@ -336,12 +340,10 @@ class Index(models.Model):
             os.makedirs(d)
             
         os.chdir(self.localpath())
-        
-        html_link = self.html_link()
         xbrl_link = self.xbrl_link()
         if verbose:
             print 'html_link:',
-            print 'xbrl_link:',xbrl_link
+            print 'xbrl_link:', xbrl_link
             
         if xbrl_link:
             if not os.path.exists(xbrl_link.split('/')[-1]):
@@ -371,10 +373,10 @@ class Index(models.Model):
             print 'no xbrl found. this option is for 10-ks.'
             return
         x = xbrl.XBRL(filepath, opener=open_method)
-        #x.fields['FiscalPeriod'] = x.fields['DocumentFiscalPeriodFocus']
-        #x.fields['FiscalYear'] = x.fields['DocumentFiscalYearFocus']
-        #x.fields['SECFilingPage'] = self.index_link()
-        #x.fields['LinkToXBRLInstance'] = self.xbrl_link() 
+        # x.fields['FiscalPeriod'] = x.fields['DocumentFiscalPeriodFocus']
+        # x.fields['FiscalYear'] = x.fields['DocumentFiscalYearFocus']
+        # x.fields['SECFilingPage'] = self.index_link()
+        # x.fields['LinkToXBRLInstance'] = self.xbrl_link()
         return x
         
     def ticker(self):
@@ -386,9 +388,9 @@ class Index(models.Model):
             return self._ticker
         filepath, _ = self.xbrl_localpath()
         if filepath:
-            ticker = filepath.split('/')[-1].split('-')[0].strip().upper()
-            if ticker:
-                self._ticker = ticker
+            local_ticker = filepath.split('/')[-1].split('-')[0].strip().upper()
+            if local_ticker:
+                self._ticker = local_ticker
             else:
                 self._ticker = None
         return self._ticker

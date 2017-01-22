@@ -1,20 +1,17 @@
 from __future__ import absolute_import
 
-from datetime import date, datetime
-from functools import partial
 import os
 import re
-from StringIO import StringIO
 import sys
-import time
 import traceback
 import urllib
+from StringIO import StringIO
+from datetime import date
 from zipfile import ZipFile
 
 from celery import shared_task
 from django.db import DatabaseError
 from django.utils import timezone
-from django.utils.encoding import force_text
 
 from django_stocks.constants import MAX_QUANTIZE
 from django_stocks.models import Attribute, AttributeValue, Company, Index, IndexFile, Namespace, Unit, DATA_DIR
@@ -60,7 +57,6 @@ def get_filing_list(year, quarter, reprocess=False):
     ifile.save()
 
     unique_companies = set()
-    bulk_companies = set()
     bulk_indexes = []
 
     if not os.path.isdir(DATA_DIR):
@@ -71,14 +67,15 @@ def get_filing_list(year, quarter, reprocess=False):
     if not os.path.exists(fn):
         try:
             compressed_data = urllib.urlopen(url).read()
-        except IOError as e:
+        except IOError:
             get_filing_list.retry()
-        fileout = file(fn, 'w')
-        fileout.write(compressed_data)
-        fileout.close()
+        else:
+            fileout = file(fn, 'w')
+            fileout.write(compressed_data)
+            fileout.close()
 
-    zip = ZipFile(fn)
-    zdata = zip.read('company.idx')
+    filing_zip = ZipFile(fn)
+    zdata = filing_zip.read('company.idx')
     lines = zdata.split('\n')
 
     for form_line in lines[10:]:
@@ -92,12 +89,21 @@ def get_filing_list(year, quarter, reprocess=False):
         dt = date(*map(int, dt.split('-')))
 
         if form in ['10-K', '10-Q', '20-F', '10-K/A', '10-Q/A', '20-F/A']:
-            if not Index.objects.filter(company__cik=cik, form=form, date=dt, filename=filename).exists():
-                unique_companies.add(Company(cik=cik, name=name))
-                bulk_indexes.append(Index(company_id=cik, form=form, date=dt, year=year, quarter=quarter, filename=filename,))
+            if not Index.objects.filter(company__cik=cik,
+                                        form=form,
+                                        date=dt,
+                                        filename=filename).exists():
+                unique_companies.add(Company(cik=cik,
+                                             name=name))
+                bulk_indexes.append(Index(company_id=cik,
+                                          form=form,
+                                          date=dt,
+                                          year=year,
+                                          quarter=quarter,
+                                          filename=filename, ))
 
     bulk_companies = {company for company in unique_companies
-                     if not Company.objects.filter(cik=company.cik).exists()}
+                      if not Company.objects.filter(cik=company.cik).exists()}
     if bulk_companies:
         try:
             Company.objects.bulk_create(bulk_companies, batch_size=1000)
@@ -105,8 +111,8 @@ def get_filing_list(year, quarter, reprocess=False):
             get_filing_list.retry()
     Index.objects.bulk_create(bulk_indexes, batch_size=2500)
     IndexFile.objects.filter(id=ifile.id).update(complete=timezone.now())
-    time_to_complete = ifile.complete - ifile.downloaded
-    logger.info('Added {0} in {1} seconds'.format(ifile.filename, time_to_complete))
+    # time_to_complete = ifile.complete - ifile.downloaded
+    # logger.info('Added {0} in {1} seconds'.format(ifile.filename, time_to_complete))
 
 
 @shared_task
@@ -114,10 +120,9 @@ def import_attrs(**kwargs):
     ifile = Index.objects.get(filename=kwargs['filename'])
     ifile.download(verbose=kwargs['verbose'])
     x = None
-    error = None
     try:
         x = ifile.xbrl()
-    except Exception, e:
+    except Exception:
         ferr = StringIO()
         traceback.print_exc(file=ferr)
         error = ferr.getvalue()
@@ -128,7 +133,7 @@ def import_attrs(**kwargs):
         error = 'No XBRL found.'
         Index.objects.filter(id=ifile.id).update(valid=False, error=error)
         return
-        
+
     while 1:
         try:
             company = ifile.company
@@ -152,7 +157,7 @@ def import_attrs(**kwargs):
 
                 namespace, _ = Namespace.objects.get_or_create(name=ns.strip())
                 attribute, _ = Attribute.objects.get_or_create(namespace=namespace,
-                                                                      name=attr_name)
+                                                               name=attr_name)
                 unit, _ = Unit.objects.get_or_create(name=node.attrib['unitRef'].strip())
                 value = (node.text or '').strip()
                 if not value:
@@ -162,7 +167,8 @@ def import_attrs(**kwargs):
                     % (MAX_QUANTIZE, len(value), repr(value))
 
                 Attribute.objects.filter(id=attribute.id).update(total_values_fresh=False)
-                if AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date, end_date=end_date).exists():
+                if AttributeValue.objects.filter(company=company, attribute=attribute, start_date=start_date,
+                                                 end_date=end_date).exists():
                     continue
                 bulk_objects.append(AttributeValue(
                     company=company,
@@ -178,12 +184,12 @@ def import_attrs(**kwargs):
                 AttributeValue.objects.bulk_create(bulk_objects)
                 bulk_objects = []
 
-            #ticker = ifile.ticker()
-            #Index.objects.filter(id=ifile.id).update(attributes_loaded=True, _ticker=ticker)
+            # ticker = ifile.ticker()
+            # Index.objects.filter(id=ifile.id).update(attributes_loaded=True, _ticker=ticker)
             Attribute.do_update()
-            #Unit.do_update()
+            # Unit.do_update()
             break
 
         except DatabaseError as e:
-            logger.error(e)
+            # logger.error(e)
             break

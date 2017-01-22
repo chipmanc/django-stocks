@@ -1,14 +1,12 @@
-#from optparse import make_option
 from datetime import date, timedelta
+
+from django.core.management.base import BaseCommand
 
 from django_stocks.tasks import get_filing_list
 
-from django.core.management.base import BaseCommand
-from django.conf import settings
-
-
-def removeNonAscii(s):
-    return "".join(i for i in s if ord(i) < 128)
+# This function might not be needed
+# def remove_non_ascii(s):
+#     return "".join(i for i in s if ord(i) < 128)
 
 
 class Command(BaseCommand):
@@ -32,9 +30,10 @@ class Command(BaseCommand):
                             type=int,
                             help='The number of days to automatically '
                                  'redownload and reprocess index files.')
-        #help = ("Download new files representing one month of 990s, "
+        # help = ("Download new files representing one month of 990s, "
         #        "ignoring months we already have. Each quarter contains hundreds "
         #        "of thousands of filings; will take a while to run.")
+
     def handle(self, *args, **options):
         reprocess = options['reprocess']
         reprocess_n_days = options['reprocess_n_days']
@@ -48,6 +47,6 @@ class Command(BaseCommand):
                     continue
                 quarter_start = date(year, quarter*3+1, 1)
                 reprocess_date = (quarter_start >
-                        (date.today() - timedelta(days=reprocess_n_days)))
+                                  (date.today() - timedelta(days=reprocess_n_days)))
                 _reprocess = (reprocess or reprocess_date)
                 get_filing_list.delay(year, quarter+1, reprocess=_reprocess)
